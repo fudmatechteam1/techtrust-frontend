@@ -36,7 +36,7 @@ const useTheme = () => React.useContext(ThemeContext);
 // --- SERVICE LAYER: AUTHENTICATION (Modularity & Encapsulation) ---
 // ====================================================================
 
-const API_BASE_URL = 'https://techtrust-backend.onrender.com'; 
+const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth'; 
 
 // Helper for standardized error handling (Fault Tolerance)
 const handleRequest = async (requestPromise) => {

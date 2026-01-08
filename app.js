@@ -33,10 +33,14 @@ const useTheme = () => React.useContext(ThemeContext);
 
 
 // ====================================================================
-// --- SERVICE LAYER: AUTHENTICATION (Modularity & Encapsulation) ---
+// --- SERVICE LAYER: API CONFIGURATION & HELPERS ---
 // ====================================================================
 
-const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth'; 
+const API_CONFIG = {
+    AUTH_BASE: 'https://techtrust-backend.onrender.com/api/auth',
+    PROFILE_BASE: 'https://techtrust-backend.onrender.com/api/profile',
+    CLAIMS_BASE: 'https://techtrust-backend.onrender.com/api/claims'
+};
 
 // Helper for standardized error handling (Fault Tolerance)
 const handleRequest = async (requestPromise) => {
@@ -55,17 +59,22 @@ const handleRequest = async (requestPromise) => {
     }
 };
 
+// ====================================================================
+// --- AUTHENTICATION SERVICE ---
+// ====================================================================
+
 const AuthService = {
     register: (name, email, password, userType) => {
-        return handleRequest(fetch(`${API_BASE_URL}/register`, {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, userType })
+            body: JSON.stringify({ name, email, password, userType }),
+            credentials: 'include'
         }));
     },
 
     login: (email, password) => {
-        return handleRequest(fetch(`${API_BASE_URL}/login`, {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/login`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -74,26 +83,133 @@ const AuthService = {
     },
 
     logout: () => {
-        return handleRequest(fetch(`${API_BASE_URL}/logout`, {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/logout`, {
             method: 'POST',
             credentials: 'include'
         }));
     },
 
-    // Password Reset Flow
-    sendResetOtp: (email) => {
-        return handleRequest(fetch(`${API_BASE_URL}/sendResetOtp`, {
+    // OTP & Account Verification
+    sendVerifyOtp: (email) => {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/sendOtp`, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         }));
     },
 
-    resetPassword: (email, otp, newPassword) => {
-        return handleRequest(fetch(`${API_BASE_URL}/resetPassword`, {
+    verifyAccount: (email, otp) => {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/verify`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        }));
+    },
+
+    // Password Reset Flow
+    sendResetOtp: (email) => {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/sendResetOtp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, otp, newPassword })
+            body: JSON.stringify({ email }),
+            credentials: 'include'
+        }));
+    },
+
+    resetPassword: (email, otp, newPassword) => {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/resetPassword`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp, newPassword }),
+            credentials: 'include'
+        }));
+    },
+
+    // Fetch all users
+    fetchAllUsers: () => {
+        return handleRequest(fetch(`${API_CONFIG.AUTH_BASE}/fetch`, {
+            method: 'GET',
+            credentials: 'include'
+        }));
+    }
+};
+
+// ====================================================================
+// --- PROFILE SERVICE ---
+// ====================================================================
+
+const ProfileService = {
+    // Fetch user by ID
+    fetchUserById: (userId) => {
+        return handleRequest(fetch(`${API_CONFIG.PROFILE_BASE}/fetch-user/${userId}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        }));
+    },
+
+    // Fetch all profiles
+    fetchAllProfiles: () => {
+        return handleRequest(fetch(`${API_CONFIG.PROFILE_BASE}/fetch1`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        }));
+    },
+
+    // Add experience to profile
+    addExperience: (skillsArray, experience, claimText, currentTrustScore) => {
+        return handleRequest(fetch(`${API_CONFIG.PROFILE_BASE}/expr`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skillsArray, experience, claimText, currentTrustScore })
+        }));
+    },
+
+    // Fetch profile by ID
+    fetchProfileById: (profileId) => {
+        return handleRequest(fetch(`${API_CONFIG.PROFILE_BASE}/fetch-profile/${profileId}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        }));
+    },
+
+    // Update profile
+    updateProfile: (profileData) => {
+        return handleRequest(fetch(`${API_CONFIG.PROFILE_BASE}/Edit-profile`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profileData)
+        }));
+    }
+};
+
+// ====================================================================
+// --- CLAIMS SERVICE ---
+// ====================================================================
+
+const ClaimsService = {
+    // Submit a new claim
+    submitClaim: (claimText) => {
+        return handleRequest(fetch(`${API_CONFIG.CLAIMS_BASE}/claim`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ claim: claimText })
+        }));
+    },
+
+    // Remove/delete a claim
+    removeClaim: (claimId) => {
+        return handleRequest(fetch(`${API_CONFIG.CLAIMS_BASE}/remove/${claimId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
         }));
     }
 };
@@ -215,7 +331,9 @@ const AuthView = ({ setView }) => {
     if (result.success) {
         // Ensure backend sends { user: { userType: ... } }
         const finalUserType = result.data.user?.userType || 'profile'; 
-        localStorage.setItem('techtust_user_type', finalUserType); 
+        const userId = result.data.user?._id || result.data.user?.id || 'default-id';
+        localStorage.setItem('techtust_user_type', finalUserType);
+        localStorage.setItem('techtrust_user_id', userId);
         alert(`Login successful!`);
         setView(finalUserType);
     } else {
@@ -410,25 +528,26 @@ const AddClaimModal = ({ isOpen, onClose, onClaimSubmitted }) => {
         setIsLoading(true);
         const form = e.target.closest('form');
         const formData = new FormData(form);
-        const title = formData.get('claim-title');
+        const claimTitle = formData.get('claim-title');
+        const claimDetails = formData.get('claim-details');
+        const fullClaim = `${claimTitle} - ${claimDetails}`;
         
         try {
-            // MOCK: Replace with API call to /claims/submit
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const isMockSuccess = Math.random() > 0.1;
+            // Call actual API to submit claim
+            const result = await ClaimsService.submitClaim(fullClaim);
 
-            if (isMockSuccess) {
-                onClaimSubmitted(title); 
+            if (result.success) {
+                onClaimSubmitted(claimTitle); 
                 alert("✅ Claim Submitted! It is now PENDING verification.");
+                onClose();
             } else {
-                throw new Error("Claim too vague or failed initial validation.");
+                throw new Error(result.error || "Claim submission failed.");
             }
         } catch (error) {
             console.error('Claim submission failed:', error.message);
             alert(`❌ Submission Failed: ${error.message}`);
         } finally {
             setIsLoading(false);
-            onClose(); 
         }
     };
 
@@ -471,11 +590,36 @@ const ProfileView = ({ claims, trustScore, newlyVerifiedId, onClaimSubmitted, on
   const newlyVerifiedClaim = claims.find(c => c.id === newlyVerifiedId);
 
   React.useEffect(() => {
-    const fetchProfileData = () => {
+    const fetchProfileData = async () => {
       setLoading(true);
-      return new Promise(resolve => { setTimeout(() => { resolve(MOCK_PROFILE_DATA_BASE); }, 1000); });
+      try {
+        // Get current user ID from localStorage or state
+        const userId = localStorage.getItem('techtrust_user_id') || 'default-user-id';
+        
+        // Fetch user profile from API
+        const result = await ProfileService.fetchUserById(userId);
+        
+        if (result.success) {
+          const userData = result.data.message || result.data;
+          setProfile({
+            name: userData.name || "User Profile",
+            title: userData.email || "Tech Professional",
+            memberSince: userData.createdAt || "Member",
+            lastVetted: new Date().toISOString().split('T')[0]
+          });
+        } else {
+          // Fallback to mock data if API fails
+          setProfile(MOCK_PROFILE_DATA_BASE);
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+        setProfile(MOCK_PROFILE_DATA_BASE);
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchProfileData().then(data => { setProfile(data); setLoading(false); });
+    
+    fetchProfileData();
   }, []);
   
   React.useEffect(() => {
@@ -487,6 +631,25 @@ const ProfileView = ({ claims, trustScore, newlyVerifiedId, onClaimSubmitted, on
   }, [newlyVerifiedId]);
 
   const handleDismiss = () => { setShowAlert(false); onAlertDismissed(); };
+
+  const handleDeleteClaim = async (claimId) => {
+    if(window.confirm('Delete this claim?')) {
+      try {
+        const result = await ClaimsService.removeClaim(claimId);
+        if (result.success) {
+          onClaimAction(claimId);
+          alert("✅ Claim deleted successfully.");
+        } else {
+          alert(`❌ Failed to delete claim: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error deleting claim:', error);
+        alert("❌ Error deleting claim");
+        // Still remove from UI optimistically
+        onClaimAction(claimId);
+      }
+    }
+  };
 
   if (loading) return <div className="text-center py-10">Loading...</div>;
   if (!profile) return <div className="text-center py-10">Failed to load.</div>;
@@ -525,7 +688,7 @@ const ProfileView = ({ claims, trustScore, newlyVerifiedId, onClaimSubmitted, on
                         <p className="font-semibold text-gray-700">{claim.text}</p>
                         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${claim.status === 'VERIFIED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{claim.status}</span>
                     </div>
-                    <button onClick={() => { if(window.confirm('Delete?')) onClaimAction(claim.id); }} className="text-red-500 text-sm hover:underline">Delete</button>
+                    <button onClick={() => { handleDeleteClaim(claim.id); }} className="text-red-500 text-sm hover:underline">Delete</button>
                 </div>
             ))}
         </div>
@@ -537,34 +700,173 @@ const ProfileView = ({ claims, trustScore, newlyVerifiedId, onClaimSubmitted, on
 };
 
 // ====================================================================
-// 5. Recruiter View (Placeholder)
+// 5. Recruiter View
 // ====================================================================
-const RecruiterView = () => (
-    <div className="w-full text-center py-20 bg-white shadow-lg rounded-lg">
-        <h1 className="text-3xl font-bold text-[#1A237E]">Recruiter Dashboard</h1>
-        <p className="text-gray-600 mt-4">Search & Job Management features coming soon.</p>
+const RecruiterView = () => {
+  const { primary, secondary, neutralBg } = useTheme();
+  const [allProfiles, setAllProfiles] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchAllProfiles = async () => {
+      setLoading(true);
+      try {
+        const result = await ProfileService.fetchAllProfiles();
+        if (result.success) {
+          const profiles = result.data.message || result.data || [];
+          setAllProfiles(Array.isArray(profiles) ? profiles : []);
+        } else {
+          setAllProfiles(MOCK_SEARCH_RESULTS);
+        }
+      } catch (error) {
+        console.error('Failed to fetch profiles:', error);
+        setAllProfiles(MOCK_SEARCH_RESULTS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchAllProfiles();
+  }, []);
+
+  if (loading) return <div className="text-center py-10">Loading profiles...</div>;
+
+  return (
+    <div className={`w-full bg-[${neutralBg}] p-6 rounded-lg shadow-xl`}>
+      <h1 className={`text-3xl font-bold text-[${primary}] mb-4`}>Recruiter Dashboard</h1>
+      <p className="text-gray-600 mb-6">Browse and search verified tech professionals</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {allProfiles.length > 0 ? allProfiles.map((profile, index) => (
+          <div key={index} className="border border-gray-300 p-4 rounded-lg hover:shadow-lg transition">
+            <h3 className={`text-lg font-bold text-[${primary}]`}>{profile.name || `Profile ${index + 1}`}</h3>
+            <p className="text-gray-600">{profile.email || profile.title || 'Tech Professional'}</p>
+            <p className="text-sm text-gray-500 mt-2">Skills: {profile.skills?.join(', ') || 'Not specified'}</p>
+            <p className={`text-sm font-semibold text-[${secondary}] mt-2`}>Trust Score: {profile.currentTrustScore || 'N/A'}</p>
+          </div>
+        )) : (
+          <div className="col-span-2 text-center py-10 text-gray-500">
+            <p>No profiles available yet. Check back soon!</p>
+          </div>
+        )}
+      </div>
     </div>
-);
+  );
+};
 
 // ====================================================================
-// 6. Verifier View (Placeholder)
+// 6. Verifier View
 // ====================================================================
-const VerifierView = () => (
-    <div className="w-full text-center py-20 bg-white shadow-lg rounded-lg">
-        <h1 className="text-3xl font-bold text-[#1A237E]">Verifier Console</h1>
-        <p className="text-gray-600 mt-4">Verification Queue features coming soon.</p>
+const VerifierView = () => {
+  const { primary, secondary, neutralBg } = useTheme();
+  const [allUsers, setAllUsers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchAllUsers = async () => {
+      setLoading(true);
+      try {
+        const result = await AuthService.fetchAllUsers();
+        if (result.success) {
+          const users = result.data.message || result.data || [];
+          setAllUsers(Array.isArray(users) ? users : []);
+        } else {
+          setAllUsers([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch users:', error);
+        setAllUsers([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchAllUsers();
+  }, []);
+
+  if (loading) return <div className="text-center py-10">Loading verification queue...</div>;
+
+  return (
+    <div className={`w-full bg-[${neutralBg}] p-6 rounded-lg shadow-xl`}>
+      <h1 className={`text-3xl font-bold text-[${primary}] mb-4`}>Verifier Console</h1>
+      <p className="text-gray-600 mb-6">Review and verify user claims and profiles</p>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className={`bg-[${secondary}] text-white`}>
+              <th className="border p-2 text-left">User ID</th>
+              <th className="border p-2 text-left">Name</th>
+              <th className="border p-2 text-left">Email</th>
+              <th className="border p-2 text-left">User Type</th>
+              <th className="border p-2 text-left">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allUsers.length > 0 ? allUsers.map((user, index) => (
+              <tr key={index} className="hover:bg-gray-100">
+                <td className="border p-2">{user.userID || user._id?.substring(0, 8) || `ID-${index}`}</td>
+                <td className="border p-2">{user.name || 'N/A'}</td>
+                <td className="border p-2">{user.email || 'N/A'}</td>
+                <td className="border p-2"><span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">{user.userType || 'User'}</span></td>
+                <td className="border p-2"><span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">Active</span></td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan="5" className="border p-4 text-center text-gray-500">No users to verify</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
-);
+  );
+};
 
 // ====================================================================
-// 7. API Management View (Placeholder)
+// 7. API Management View
 // ====================================================================
-const EnterpriseAPIView = () => (
-    <div className="w-full text-center py-20 bg-white shadow-lg rounded-lg">
-        <h1 className="text-3xl font-bold text-[#1A237E]">Enterprise API Management</h1>
-        <p className="text-gray-600 mt-4">API Key generation features coming soon.</p>
+const EnterpriseAPIView = () => {
+  const { primary, secondary, neutralBg } = useTheme();
+
+  return (
+    <div className={`w-full bg-[${neutralBg}] p-6 rounded-lg shadow-xl`}>
+      <h1 className={`text-3xl font-bold text-[${primary}] mb-4`}>Enterprise API Management</h1>
+      <p className="text-gray-600 mb-6">Manage your API keys and integrations</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="border border-gray-300 p-4 rounded-lg">
+          <h3 className={`text-lg font-bold text-[${primary}] mb-2`}>Available APIs</h3>
+          <ul className="space-y-2 text-sm text-gray-700">
+            <li>✅ User Search API - /api/profile/fetch-user</li>
+            <li>✅ Profile Fetch API - /api/profile/fetch-profile</li>
+            <li>✅ Add Experience API - /api/profile/expr</li>
+            <li>✅ Claims API - /api/claims/claim</li>
+            <li>✅ Auth API - /api/auth/register, /login, /logout</li>
+          </ul>
+        </div>
+        
+        <div className="border border-gray-300 p-4 rounded-lg">
+          <h3 className={`text-lg font-bold text-[${primary}] mb-2`}>API Keys</h3>
+          <div className="space-y-2">
+            {MOCK_API_KEYS.map(key => (
+              <div key={key.id} className="flex justify-between items-center text-sm p-2 bg-gray-100 rounded">
+                <span className="font-mono text-xs truncate">{key.key}</span>
+                <span className={`px-2 py-1 rounded text-xs ${key.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {key.active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+        <p className="text-sm text-blue-800"><strong>Base URL:</strong> https://techtrust-backend.onrender.com</p>
+      </div>
     </div>
-);
+  );
+};
 
 
 // ====================================================================

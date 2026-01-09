@@ -1,54 +1,46 @@
-// app.js - Final Working React App for CDN Environment (Day 22: Password Reset & Refactor)
+// app.js - Final Working React App for CDN Environment (Day 23: UI Polish - Custom Image Integration)
 
 // --- THEME CONFIGURATION ---
 const THEME_CONFIG = {
   name: 'light',
   colors: {
-    primary: '#1A237E', // Deep Navy Blue
-    secondary: '#4FC3F7', // Electric Blue
-    success: '#69F0AE', // Verified Green
+    primary: '#002B5C', // Huawei Deep Navy (Official)
+    secondary: '#E60012', // Huawei Red (Accent)
+    success: '#69F0AE', 
     textOnPrimary: 'white',
-    textOnSecondary: '#1A237E', 
-    neutralBg: 'white',
-    border: '#e5e7eb', // gray-200
+    textOnSecondary: 'white', 
+    neutralBg: '#f8fafc', // Light slate background
+    border: '#e2e8f0', 
   }
 };
 
 const DARK_THEME_CONFIG = {
   name: 'dark',
   colors: {
-    primary: '#BBDEFB', // Light Blue for contrast
-    secondary: '#00B0FF', // Sky Blue
+    primary: '#BBDEFB', 
+    secondary: '#ff5252', 
     success: '#69F0AE',
-    textOnPrimary: '#1A237E', 
-    textOnSecondary: '#1A237E',
-    neutralBg: '#212121', // Dark Gray background
-    border: '#424242', // Darker border
+    textOnPrimary: '#002B5C', 
+    textOnSecondary: 'white',
+    neutralBg: '#0f172a', // Slate 900
+    border: '#334155', 
   }
 };
 
-// --- Theme Context Setup ---
 const ThemeContext = React.createContext(THEME_CONFIG.colors);
 const useTheme = () => React.useContext(ThemeContext);
 
-
 // ====================================================================
-// --- SERVICE LAYER: AUTHENTICATION ---
+// --- SERVICE LAYER (Unchanged Logic) ---
 // ====================================================================
-
-// UPDATED: Points to your Render backend
 const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth';
 
 const handleRequest = async (requestPromise) => {
     try {
         const response = await requestPromise;
         const data = await response.json();
-        
-        if (response.ok) {
-            return { success: true, data };
-        } else {
-            return { success: false, error: data.message || response.statusText };
-        }
+        if (response.ok) return { success: true, data };
+        return { success: false, error: data.message || response.statusText };
     } catch (error) {
         console.error("API Request Error:", error);
         return { success: false, error: "Network error. Please check your connection." };
@@ -63,7 +55,6 @@ const AuthService = {
             body: JSON.stringify({ name, email, password, userType })
         }));
     },
-
     login: (email, password) => {
         return handleRequest(fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
@@ -72,7 +63,6 @@ const AuthService = {
             body: JSON.stringify({ email, password })
         }));
     },
-
     requestOtp: (email) => {
         return handleRequest(fetch(`${API_BASE_URL}/send-verify-otp`, {
             method: 'POST',
@@ -80,7 +70,6 @@ const AuthService = {
             body: JSON.stringify({ email })
         }));
     },
-
     verifyOtp: (email, otp) => {
         return handleRequest(fetch(`${API_BASE_URL}/verify-account`, {
             method: 'POST',
@@ -88,7 +77,6 @@ const AuthService = {
             body: JSON.stringify({ email, otp })
         }));
     },
-
     requestPasswordReset: (email) => {
         return handleRequest(fetch(`${API_BASE_URL}/send-reset-otp`, {
             method: 'POST',
@@ -96,7 +84,6 @@ const AuthService = {
             body: JSON.stringify({ email })
         }));
     },
-
     resetPassword: (email, otp, newPassword) => {
         return handleRequest(fetch(`${API_BASE_URL}/reset-password`, {
             method: 'POST',
@@ -104,7 +91,6 @@ const AuthService = {
             body: JSON.stringify({ email, otp, newPassword })
         }));
     },
-
     logout: () => {
         return handleRequest(fetch(`${API_BASE_URL}/logout`, {
             method: 'POST',
@@ -114,35 +100,8 @@ const AuthService = {
 };
 
 // ====================================================================
-// --- UI COMPONENTS ---
+// --- MODERN AUTH VIEW (Split Screen Design with Custom Image) ---
 // ====================================================================
-
-const Header = ({ currentView, setView, toggleTheme, themeMode }) => {
-  return (
-    <header className="shadow-md p-4 flex justify-between items-center sticky top-0 z-50 bg-white dark:bg-gray-800">
-      <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setView('login')}>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-600 text-white font-bold">T</div>
-        <h1 className="text-xl font-bold tracking-tight text-blue-900 dark:text-blue-100">TechTrust</h1>
-      </div>
-      <div className="flex items-center space-x-4">
-        <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            {themeMode === 'light' ? '🌙' : '☀️'}
-        </button>
-        {currentView !== 'login' && (
-          <button 
-            onClick={async () => {
-                await AuthService.logout();
-                setView('login');
-            }} 
-            className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-red-500 transition-colors"
-          >
-            Logout
-          </button>
-        )}
-      </div>
-    </header>
-  );
-};
 
 const AuthView = ({ setView }) => {
   const [mode, setMode] = React.useState('login'); 
@@ -155,7 +114,7 @@ const AuthView = ({ setView }) => {
     email: '',
     password: '',
     otp: '',
-    user_type: 'professional' // Default value matching enum
+    user_type: 'professional'
   });
 
   const handleInputChange = (e) => {
@@ -174,137 +133,208 @@ const AuthView = ({ setView }) => {
         if (result.success) {
             const role = result.data.user?.userType || 'professional';
             setView(role === 'recruiter' ? 'recruiter' : 'profile');
-        } else {
-            setError(result.error);
-        }
+        } else { setError(result.error); }
       } else if (mode === 'register') {
         const result = await AuthService.register(formData.name, formData.email, formData.password, formData.user_type);
         if (result.success) {
             setMode('otp');
-            setSuccessMsg("Registration successful! Check your email for OTP.");
-        } else {
-            setError(result.error);
-        }
+            setSuccessMsg("Account created! Check email for OTP.");
+        } else { setError(result.error); }
       } else if (mode === 'otp') {
         const result = await AuthService.verifyOtp(formData.email, formData.otp);
         if (result.success) {
-            setSuccessMsg("Account verified! You can now login.");
-            setTimeout(() => setMode('login'), 2000);
-        } else {
-            setError(result.error);
-        }
+            setSuccessMsg("Verified! Logging you in...");
+            setTimeout(() => setMode('login'), 1500);
+        } else { setError(result.error); }
       } else if (mode === 'forgot') {
         const result = await AuthService.requestPasswordReset(formData.email);
         if (result.success) {
             setMode('reset');
-            setSuccessMsg("Reset OTP sent to your email.");
-        } else {
-            setError(result.error);
-        }
+            setSuccessMsg("OTP sent to your email.");
+        } else { setError(result.error); }
       } else if (mode === 'reset') {
         const result = await AuthService.resetPassword(formData.email, formData.otp, formData.password);
         if (result.success) {
-            setSuccessMsg("Password reset successful!");
+            setSuccessMsg("Password reset! Login now.");
             setTimeout(() => setMode('login'), 2000);
-        } else {
-            setError(result.error);
-        }
+        } else { setError(result.error); }
       }
-    } catch (err) {
-      setError("An unexpected error occurred.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError("Network Error. Please try again."); } finally { setLoading(false); }
   };
 
-  const renderRegisterForm = () => (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium mb-1">Full Name</label>
-        <input type="text" name="name" required onChange={handleInputChange} className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="John Doe" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">Email</label>
-        <input type="email" name="email" required onChange={handleInputChange} className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="john@example.com" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">Password</label>
-        <input type="password" name="password" required onChange={handleInputChange} className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="Minimum 8 characters" />
-      </div>
-      <div className="flex space-x-4 py-2">
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input type="radio" name="user_type" value="professional" defaultChecked onChange={handleInputChange} className="w-4 h-4 text-blue-600" />
-          <span className="text-sm">Professional</span>
-        </label>
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input type="radio" name="user_type" value="recruiter" onChange={handleInputChange} className="w-4 h-4 text-blue-600" />
-          <span className="text-sm">Recruiter</span>
-        </label>
-      </div>
-      <button disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50">
-        {loading ? 'Processing...' : 'Create Account'}
-      </button>
-    </form>
-  );
+  const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] focus:border-transparent transition-all outline-none text-gray-900 placeholder-gray-400";
+  const btnClasses = "w-full py-3 rounded-lg font-bold text-white transition-transform transform active:scale-95 shadow-lg bg-gradient-to-r from-[#002B5C] to-[#1A237E] hover:from-[#002B5C] hover:to-[#002B5C]";
+
+  // Image URL selected from user uploads
+  const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"; // Placeholder for the network/tech image you selected
 
   return (
-    <div className="w-full max-w-md bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border dark:border-gray-700">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-extrabold text-blue-900 dark:text-blue-100 mb-2">
-            {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Join TechTrust' : 'Verification'}
-        </h2>
-      </div>
+    <div className="flex w-full h-screen bg-gray-100 overflow-hidden">
+        
+        {/* LEFT SIDE: Brand / Image Panel (Hidden on Mobile) */}
+        <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`}}>
+            
+            {/* Dark Overlay for Text Readability */}
+            <div className="absolute inset-0 bg-[#002B5C] opacity-85"></div>
 
-      {error && <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">{error}</div>}
-      {successMsg && <div className="mb-4 p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm">{successMsg}</div>}
+            <div className="relative z-10 text-center px-12 text-white">
+                <div className="mb-8 inline-block p-4 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-2xl">
+                    <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                </div>
+                <h1 className="text-6xl font-bold mb-4 font-poppins tracking-tight">TechTrust</h1>
+                <p className="text-xl font-light text-gray-200 mb-8 italic">"Immutable Trust. Intelligent Talent."</p>
+                
+                <div className="mt-12 pt-8 border-t border-white/20 w-3/4 mx-auto">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-300 mb-3">Powered By</p>
+                    <div className="flex justify-center items-center space-x-4">
+                        <span className="font-bold text-lg">HUAWEI CLOUD</span>
+                        <span className="text-gray-400">|</span>
+                        <span className="font-bold text-lg">TeamFudma1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-      {mode === 'login' ? (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="email" name="email" required onChange={handleInputChange} className="w-full p-3 border rounded-lg dark:bg-gray-700" placeholder="Email" />
-          <input type="password" name="password" required onChange={handleInputChange} className="w-full p-3 border rounded-lg dark:bg-gray-700" placeholder="Password" />
-          <button type="button" onClick={() => setMode('forgot')} className="text-sm text-blue-600 block text-right">Forgot Password?</button>
-          <button disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Sign In</button>
-        </form>
-      ) : mode === 'register' ? renderRegisterForm() : null}
+        {/* RIGHT SIDE: Auth Forms */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white relative">
+            <div className="w-full max-w-md">
+                
+                {/* Mobile Header (Only shows on small screens) */}
+                <div className="lg:hidden text-center mb-8">
+                    <h1 className="text-3xl font-bold text-[#002B5C]">TechTrust</h1>
+                    <p className="text-gray-500">Secure Professional Verification</p>
+                </div>
 
-      <div className="mt-8 text-center text-sm">
-        {mode === 'login' ? (
-            <p>New? <button onClick={() => setMode('register')} className="text-blue-600 font-bold">Create Account</button></p>
-        ) : (
-            <p>Back to <button onClick={() => setMode('login')} className="text-blue-600 font-bold">Login</button></p>
-        )}
-      </div>
+                <div className="mb-8">
+                    <h2 className="text-3xl font-bold text-gray-900">
+                        {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create ID' : mode === 'otp' ? 'Verify Identity' : 'Reset Password'}
+                    </h2>
+                    <p className="text-gray-500 mt-2">
+                        {mode === 'login' ? 'Enter your credentials to access your dashboard.' : mode === 'register' ? 'Join the decentralized trust network.' : 'Enter the code sent to your email.'}
+                    </p>
+                </div>
+
+                {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-[#E60012] text-red-700 rounded-r-lg text-sm flex items-center"><span className="mr-2">⚠️</span>{error}</div>}
+                {successMsg && <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r-lg text-sm flex items-center"><span className="mr-2">✅</span>{successMsg}</div>}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    
+                    {/* INPUT FIELDS */}
+                    {mode === 'register' && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-700">Full Name</label>
+                            <input type="text" name="name" required onChange={handleInputChange} className={inputClasses} placeholder="e.g. Aminu Kano" />
+                        </div>
+                    )}
+
+                    {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-700">Email Address</label>
+                            <input type="email" name="email" required onChange={handleInputChange} className={inputClasses} placeholder="student@fudma.edu.ng" />
+                        </div>
+                    )}
+
+                    {(mode === 'login' || mode === 'register' || mode === 'reset') && (
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <label className="text-sm font-semibold text-gray-700">Password</label>
+                                {mode === 'login' && <button type="button" onClick={() => setMode('forgot')} className="text-sm text-[#E60012] hover:underline font-medium">Forgot?</button>}
+                            </div>
+                            <input type="password" name="password" required onChange={handleInputChange} className={inputClasses} placeholder="••••••••" />
+                        </div>
+                    )}
+
+                    {(mode === 'otp' || mode === 'reset') && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-700">OTP Code</label>
+                            <input type="text" name="otp" required maxLength="6" onChange={handleInputChange} className={`${inputClasses} text-center tracking-[0.5em] text-xl`} placeholder="000000" />
+                        </div>
+                    )}
+
+                    {/* ROLE SELECTION (Register Only) */}
+                    {mode === 'register' && (
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                            <label className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-all ${formData.user_type === 'professional' ? 'border-[#002B5C] bg-blue-50 ring-1 ring-[#002B5C]' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <input type="radio" name="user_type" value="professional" className="hidden" checked={formData.user_type === 'professional'} onChange={handleInputChange} />
+                                <span className="text-lg mb-1">👨‍💻</span>
+                                <span className={`text-sm font-medium ${formData.user_type === 'professional' ? 'text-[#002B5C]' : 'text-gray-500'}`}>Professional</span>
+                            </label>
+                            <label className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-all ${formData.user_type === 'recruiter' ? 'border-[#002B5C] bg-blue-50 ring-1 ring-[#002B5C]' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <input type="radio" name="user_type" value="recruiter" className="hidden" checked={formData.user_type === 'recruiter'} onChange={handleInputChange} />
+                                <span className="text-lg mb-1">🔍</span>
+                                <span className={`text-sm font-medium ${formData.user_type === 'recruiter' ? 'text-[#002B5C]' : 'text-gray-500'}`}>Recruiter</span>
+                            </label>
+                        </div>
+                    )}
+
+                    {/* ACTION BUTTON */}
+                    <button disabled={loading} className={btnClasses}>
+                        {loading ? 'Processing...' : mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Identity' : 'Verify'}
+                    </button>
+                </form>
+
+                {/* FOOTER LINKS */}
+                <div className="mt-8 text-center text-sm text-gray-500">
+                    {mode === 'login' ? (
+                        <p>No digital ID yet? <button onClick={() => setMode('register')} className="text-[#002B5C] font-bold hover:underline">Create Account</button></p>
+                    ) : (
+                        <p>Already verified? <button onClick={() => setMode('login')} className="text-[#002B5C] font-bold hover:underline">Login here</button></p>
+                    )}
+                </div>
+                
+                <div className="mt-12 text-center text-xs text-gray-400">
+                    <p>Federal University Dutsin-Ma | Huawei ICT Competition 2025</p>
+                </div>
+            </div>
+        </div>
     </div>
   );
 };
 
-const ProfileView = () => <div className="text-center p-8"><h1 className="text-2xl font-bold">Professional Dashboard</h1><p>Skill verification system active.</p></div>;
-const RecruiterView = () => <div className="text-center p-8"><h1 className="text-2xl font-bold">Recruiter Dashboard</h1><p>Find verified talent.</p></div>;
+// ====================================================================
+// --- APP CONTAINER & ROUTING ---
+// ====================================================================
+
+const Header = ({ currentView, setView, toggleTheme, themeMode }) => {
+  return (
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setView('profile')}>
+                <div className="w-8 h-8 rounded bg-[#002B5C] flex items-center justify-center text-white font-bold">T</div>
+                <h1 className="text-xl font-bold text-[#002B5C] dark:text-white">TechTrust</h1>
+            </div>
+            <button 
+                onClick={async () => { await AuthService.logout(); setView('login'); }} 
+                className="text-sm font-medium text-gray-500 hover:text-[#E60012]"
+            >
+                Sign Out
+            </button>
+        </div>
+    </header>
+  );
+};
+
+// Placeholder Dashboards
+const ProfileView = () => <div className="p-10 text-center"><h2 className="text-2xl font-bold mb-4">Professional Dashboard</h2><p>Welcome to the verification portal.</p></div>;
+const RecruiterView = () => <div className="p-10 text-center"><h2 className="text-2xl font-bold mb-4">Recruiter Portal</h2><p>Search for verified talent.</p></div>;
 
 const App = () => {
   const [currentView, setCurrentView] = React.useState('login'); 
   const [themeMode, setThemeMode] = React.useState('light');
-  const toggleTheme = () => setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
-  const activeTheme = themeMode === 'light' ? THEME_CONFIG : DARK_THEME_CONFIG;
-
+  
+  // Simple Router
   let content;
-  switch (currentView) {
-    case 'login': content = <AuthView setView={setCurrentView} />; break;
-    case 'profile': content = <ProfileView />; break;
-    case 'recruiter': content = <RecruiterView />; break;
-    default: content = <AuthView setView={setCurrentView} />;
-  }
+  if (currentView === 'login') return <AuthView setView={setCurrentView} />;
+  
+  if (currentView === 'profile') content = <ProfileView />;
+  else if (currentView === 'recruiter') content = <RecruiterView />;
+  else content = <ProfileView />;
 
   return (
-    <ThemeContext.Provider value={activeTheme.colors}>
-      <div className={`min-h-screen flex flex-col ${themeMode === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-800'}`}>
-        <Header currentView={currentView} setView={setCurrentView} toggleTheme={toggleTheme} themeMode={themeMode} />
-        <main className="flex-grow flex items-center justify-center p-4">
-            {content}
-        </main>
-        <footer className="bg-gray-800 text-white p-4 text-center text-sm">
-            &copy; 2025 TechTrust.
-        </footer>
+    <ThemeContext.Provider value={THEME_CONFIG.colors}>
+      <div className={`min-h-screen flex flex-col ${themeMode === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+        <Header currentView={currentView} setView={setCurrentView} toggleTheme={() => setThemeMode(m => m === 'light' ? 'dark' : 'light')} themeMode={themeMode} />
+        <main className="flex-grow">{content}</main>
       </div>
     </ThemeContext.Provider>
   );

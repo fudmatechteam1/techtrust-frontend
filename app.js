@@ -31,7 +31,7 @@ const ThemeContext = React.createContext(THEME_CONFIG.colors);
 const useTheme = () => React.useContext(ThemeContext);
 
 // ====================================================================
-// --- SERVICE LAYER ---
+// --- SERVICE LAYER (Updated Logic) ---
 // ====================================================================
 const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth';
 
@@ -58,19 +58,19 @@ const AuthService = {
     // FIXED: Correct endpoint for verification
     verifyOtp: (data) => AuthService.request('/verifyAccount', data),
     
-    // Password Reset Routes (Fixed to camelCase)
+    // FIXED: Password Reset Routes (camelCase)
     requestPasswordReset: (email) => AuthService.request('/sendResetOtp', { email }),
     resetPassword: (data) => AuthService.request('/resetPassword', data)
 };
 
 // ====================================================================
-// --- AUTH VIEW (Original Static Design + Wake Logic) ---
+// --- AUTH VIEW (Original Design + Wake Logic) ---
 // ====================================================================
 
 const AuthView = ({ setView }) => {
   const [mode, setMode] = React.useState('login'); 
   const [loading, setLoading] = React.useState(false);
-  const [isWaking, setIsWaking] = React.useState(false); // NEW: Server Wake Logic
+  const [isWaking, setIsWaking] = React.useState(false); // LOGIC WAKE: Feedback for delay
   const [error, setError] = React.useState('');
   const [successMsg, setSuccessMsg] = React.useState('');
 
@@ -93,7 +93,7 @@ const AuthView = ({ setView }) => {
     setLoading(true);
     setIsWaking(false);
 
-    // NEW: Timer to notify user if Render is taking long to wake up
+    // LOGIC WAKE: Start timer for slow Render start
     const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
 
     try {
@@ -118,12 +118,14 @@ const AuthView = ({ setView }) => {
             setTimeout(() => setMode('login'), 1500);
         } else { setError(result.message); }
       } else if (mode === 'forgot') {
+        // FIXED: Calls sendResetOtp
         result = await AuthService.requestPasswordReset(formData.email);
         if (result.success) {
             setMode('reset');
             setSuccessMsg("OTP sent to your email.");
         } else { setError(result.message); }
       } else if (mode === 'reset') {
+        // FIXED: Calls resetPassword
         result = await AuthService.resetPassword({ email: formData.email, otp: formData.otp, newPassword: formData.password });
         if (result.success) {
             setSuccessMsg("Password reset! Login now.");
@@ -142,13 +144,12 @@ const AuthView = ({ setView }) => {
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none";
   const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] transition-all disabled:opacity-50";
 
-
+  // Using the image from your uploaded file
   const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1";
 
   return (
     <div className="flex w-full h-screen bg-gray-100 overflow-hidden">
-        
-        {/* LEFT SIDE: Brand / Image Panel (Static, No Sliding) */}
+        {/* LEFT PANEL - BRANDING (Static) */}
         <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`}}>
             <div className="absolute inset-0 bg-[#002B5C] opacity-85"></div>
             <div className="relative z-10 text-center px-12 text-white">
@@ -167,7 +168,7 @@ const AuthView = ({ setView }) => {
             </div>
         </div>
 
-        {/* RIGHT SIDE: Auth Forms (Static, No Sliding) */}
+        {/* RIGHT PANEL - FORM */}
         <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white relative">
             <div className="w-full max-w-md">
                 
@@ -179,9 +180,6 @@ const AuthView = ({ setView }) => {
                     <h2 className="text-3xl font-bold text-gray-900">
                         {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create ID' : mode === 'otp' ? 'Verify Identity' : mode === 'forgot' ? 'Reset Password' : 'New Password'}
                     </h2>
-                    <p className="text-gray-500 mt-2">
-                        {mode === 'login' ? 'Enter your credentials to access your dashboard.' : mode === 'register' ? 'Join the decentralized trust network.' : 'Secure verification step.'}
-                    </p>
                 </div>
 
                 {/* LOGIC WAKE FEEDBACK */}
@@ -204,7 +202,7 @@ const AuthView = ({ setView }) => {
                         </div>
                     )}
 
-                    {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
+                    {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'otp' || mode === 'reset') && mode !== 'otp' && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">Email Address</label>
                             <input type="email" name="email" required onChange={handleInputChange} className={inputClasses} placeholder="student@fudma.edu.ng" />
@@ -214,7 +212,9 @@ const AuthView = ({ setView }) => {
                     {(mode === 'login' || mode === 'register' || mode === 'reset') && (
                         <div className="space-y-1">
                             <div className="flex justify-between">
-                                <label className="text-sm font-semibold text-gray-700">Password</label>
+                                <label className="text-sm font-semibold text-gray-700">
+                                    {mode === 'reset' ? 'New Password' : 'Password'}
+                                </label>
                                 {mode === 'login' && <button type="button" onClick={() => setMode('forgot')} className="text-sm text-[#E60012] hover:underline font-medium">Forgot?</button>}
                             </div>
                             <input type="password" name="password" required onChange={handleInputChange} className={inputClasses} placeholder="••••••••" />

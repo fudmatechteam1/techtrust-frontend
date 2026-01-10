@@ -31,7 +31,7 @@ const ThemeContext = React.createContext(THEME_CONFIG.colors);
 const useTheme = () => React.useContext(ThemeContext);
 
 // ====================================================================
-// --- SERVICE LAYER ---
+// --- SERVICE LAYER (Fixed Routes) ---
 // ====================================================================
 const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth';
 
@@ -54,17 +54,24 @@ const AuthService = {
 
     login: (data) => AuthService.request('/login', data),
     register: (data) => AuthService.request('/register', data),
-    sendOtp: (email) => AuthService.request('/sendVerifyOtp', { email }),
-    // FIXED: Correct endpoint for verification
-    verifyOtp: (data) => AuthService.request('/verifyAccount', data),
     
-    // FIXED: Password Reset Routes (camelCase)
+    // FIXED: Updated to match authRoute.js "/sendOtp"
+    requestOtp: (email) => AuthService.request('/sendOtp', { email }),
+    
+    // FIXED: Updated to match authRoute.js "/verify"
+    verifyOtp: (data) => AuthService.request('/verify', data),
+    
+    // FIXED: Updated to match authRoute.js "/sendResetOtp"
     requestPasswordReset: (email) => AuthService.request('/sendResetOtp', { email }),
-    resetPassword: (data) => AuthService.request('/resetPassword', data)
+    
+    // FIXED: Updated to match authRoute.js "/resetPassword"
+    resetPassword: (data) => AuthService.request('/resetPassword', data),
+    
+    logout: () => AuthService.request('/logout', {})
 };
 
 // ====================================================================
-// --- AUTH VIEW (Original Design + Wake Logic) ---
+// --- AUTH VIEW (Static Design + Wake Logic) ---
 // ====================================================================
 
 const AuthView = ({ setView }) => {
@@ -111,21 +118,19 @@ const AuthView = ({ setView }) => {
             setSuccessMsg("Account created! Check email for OTP.");
         } else { setError(result.message); }
       } else if (mode === 'otp') {
-        // FIXED: Calls correct verifyAccount endpoint
+        // FIXED: Calls correct verify endpoint
         result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
         if (result.success) {
             setSuccessMsg("Verified! Redirecting to login...");
             setTimeout(() => setMode('login'), 1500);
         } else { setError(result.message); }
       } else if (mode === 'forgot') {
-        // FIXED: Calls sendResetOtp
         result = await AuthService.requestPasswordReset(formData.email);
         if (result.success) {
             setMode('reset');
             setSuccessMsg("OTP sent to your email.");
         } else { setError(result.message); }
       } else if (mode === 'reset') {
-        // FIXED: Calls resetPassword
         result = await AuthService.resetPassword({ email: formData.email, otp: formData.otp, newPassword: formData.password });
         if (result.success) {
             setSuccessMsg("Password reset! Login now.");
@@ -133,7 +138,7 @@ const AuthView = ({ setView }) => {
         } else { setError(result.message); }
       }
     } catch (err) { 
-        setError("Connection error. Try again."); 
+        setError("Connection error. Check your network or CORS settings."); 
     } finally { 
         clearTimeout(wakingTimer);
         setLoading(false); 

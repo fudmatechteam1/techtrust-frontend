@@ -31,81 +31,46 @@ const ThemeContext = React.createContext(THEME_CONFIG.colors);
 const useTheme = () => React.useContext(ThemeContext);
 
 // ====================================================================
-// --- SERVICE LAYER (Unchanged Logic) ---
+// --- SERVICE LAYER ---
 // ====================================================================
 const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth';
 
-const handleRequest = async (requestPromise) => {
-    try {
-        const response = await requestPromise;
-        const data = await response.json();
-        if (response.ok) return { success: true, data };
-        return { success: false, error: data.message || response.statusText };
-    } catch (error) {
-        console.error("API Request Error:", error);
-        return { success: false, error: "Network error. Please check your connection." };
-    }
-};
-
 const AuthService = {
-    register: (name, email, password, userType) => {
-        return handleRequest(fetch(`${API_BASE_URL}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, userType })
-        }));
+    async request(endpoint, data) {
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Server error');
+            return { success: true, data: result };
+        } catch (error) {
+            console.error(`API Error (${endpoint}):`, error);
+            return { success: false, message: error.message };
+        }
     },
-    login: (email, password) => {
-        return handleRequest(fetch(`${API_BASE_URL}/login`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        }));
-    },
-    requestOtp: (email) => {
-        return handleRequest(fetch(`${API_BASE_URL}/send-verify-otp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        }));
-    },
-    verifyOtp: (email, otp) => {
-        return handleRequest(fetch(`${API_BASE_URL}/verify-account`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, otp })
-        }));
-    },
-    requestPasswordReset: (email) => {
-        return handleRequest(fetch(`${API_BASE_URL}/send-reset-otp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        }));
-    },
-    resetPassword: (email, otp, newPassword) => {
-        return handleRequest(fetch(`${API_BASE_URL}/reset-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, otp, newPassword })
-        }));
-    },
-    logout: () => {
-        return handleRequest(fetch(`${API_BASE_URL}/logout`, {
-            method: 'POST',
-            credentials: 'include'
-        }));
-    }
+
+    login: (data) => AuthService.request('/login', data),
+    register: (data) => AuthService.request('/register', data),
+    sendOtp: (email) => AuthService.request('/sendVerifyOtp', { email }),
+    // FIXED: Correct endpoint for verification
+    verifyOtp: (data) => AuthService.request('/verifyAccount', data),
+    
+    // Password Reset Routes (Fixed to camelCase)
+    requestPasswordReset: (email) => AuthService.request('/sendResetOtp', { email }),
+    resetPassword: (data) => AuthService.request('/resetPassword', data)
 };
 
 // ====================================================================
-// --- MODERN AUTH VIEW (Split Screen Design with Custom Image) ---
+// --- AUTH VIEW (Original Static Design + Wake Logic) ---
 // ====================================================================
 
 const AuthView = ({ setView }) => {
   const [mode, setMode] = React.useState('login'); 
   const [loading, setLoading] = React.useState(false);
+  const [isWaking, setIsWaking] = React.useState(false); // NEW: Server Wake Logic
   const [error, setError] = React.useState('');
   const [successMsg, setSuccessMsg] = React.useState('');
 
@@ -126,95 +91,105 @@ const AuthView = ({ setView }) => {
     setError('');
     setSuccessMsg('');
     setLoading(true);
-    
+    setIsWaking(false);
+
+    // NEW: Timer to notify user if Render is taking long to wake up
+    const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
 
     try {
+      let result;
       if (mode === 'login') {
-        const result = await AuthService.login(formData.email, formData.password);
+        result = await AuthService.login({ email: formData.email, password: formData.password });
         if (result.success) {
             const role = result.data.user?.userType || 'professional';
             setView(role === 'recruiter' ? 'recruiter' : 'profile');
-        } else { setError(result.error); }
+        } else { setError(result.message); }
       } else if (mode === 'register') {
-        const result = await AuthService.register(formData.name, formData.email, formData.password, formData.user_type);
+        result = await AuthService.register({ name: formData.name, email: formData.email, password: formData.password, userType: formData.user_type });
         if (result.success) {
             setMode('otp');
             setSuccessMsg("Account created! Check email for OTP.");
-        } else { setError(result.error); }
+        } else { setError(result.message); }
       } else if (mode === 'otp') {
-        const result = await AuthService.verifyOtp(formData.email, formData.otp);
+        // FIXED: Calls correct verifyAccount endpoint
+        result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
         if (result.success) {
-            setSuccessMsg("Verified! Logging you in...");
+            setSuccessMsg("Verified! Redirecting to login...");
             setTimeout(() => setMode('login'), 1500);
-        } else { setError(result.error); }
+        } else { setError(result.message); }
       } else if (mode === 'forgot') {
-        const result = await AuthService.requestPasswordReset(formData.email);
+        result = await AuthService.requestPasswordReset(formData.email);
         if (result.success) {
             setMode('reset');
             setSuccessMsg("OTP sent to your email.");
-        } else { setError(result.error); }
+        } else { setError(result.message); }
       } else if (mode === 'reset') {
-        const result = await AuthService.resetPassword(formData.email, formData.otp, formData.password);
+        result = await AuthService.resetPassword({ email: formData.email, otp: formData.otp, newPassword: formData.password });
         if (result.success) {
             setSuccessMsg("Password reset! Login now.");
             setTimeout(() => setMode('login'), 2000);
-        } else { setError(result.error); }
+        } else { setError(result.message); }
       }
-    } catch (err) { setError("Network Error. Please try again."); } finally { setLoading(false); }
-
+    } catch (err) { 
+        setError("Connection error. Try again."); 
+    } finally { 
+        clearTimeout(wakingTimer);
+        setLoading(false); 
+        setIsWaking(false);
+    }
   };
 
-  const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] focus:border-transparent transition-all outline-none text-gray-900 placeholder-gray-400";
-  const btnClasses = "w-full py-3 rounded-lg font-bold text-white transition-transform transform active:scale-95 shadow-lg bg-gradient-to-r from-[#002B5C] to-[#1A237E] hover:from-[#002B5C] hover:to-[#002B5C]";
+  const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none";
+  const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] transition-all disabled:opacity-50";
 
-  // Image URL selected from user uploads
-  const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"; // Placeholder for the network/tech image you selected
+
+  const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1";
 
   return (
     <div className="flex w-full h-screen bg-gray-100 overflow-hidden">
         
-        {/* LEFT SIDE: Brand / Image Panel (Hidden on Mobile) */}
+        {/* LEFT SIDE: Brand / Image Panel (Static, No Sliding) */}
         <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`}}>
-            
-            {/* Dark Overlay for Text Readability */}
             <div className="absolute inset-0 bg-[#002B5C] opacity-85"></div>
-
             <div className="relative z-10 text-center px-12 text-white">
                 <div className="mb-8 inline-block p-4 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-2xl">
                     <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                 </div>
-                <h1 className="text-6xl font-bold mb-4 font-poppins tracking-tight">TechTrust</h1>
+                <h1 className="text-6xl font-bold mb-4 tracking-tight">TechTrust</h1>
                 <p className="text-xl font-light text-gray-200 mb-8 italic">"Immutable Trust. Intelligent Talent."</p>
                 
                 <div className="mt-12 pt-8 border-t border-white/20 w-3/4 mx-auto">
                     <p className="text-xs uppercase tracking-[0.2em] text-gray-300 mb-3">Powered By</p>
                     <div className="flex justify-center items-center space-x-4">
-                        <span className="font-bold text-lg">HUAWEI CLOUD</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="font-bold text-lg">TeamFudma1</span>
+                        <span className="font-bold text-lg text-white">HUAWEI CLOUD</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* RIGHT SIDE: Auth Forms */}
+        {/* RIGHT SIDE: Auth Forms (Static, No Sliding) */}
         <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white relative">
             <div className="w-full max-w-md">
                 
-                {/* Mobile Header (Only shows on small screens) */}
                 <div className="lg:hidden text-center mb-8">
                     <h1 className="text-3xl font-bold text-[#002B5C]">TechTrust</h1>
-                    <p className="text-gray-500">Secure Professional Verification</p>
                 </div>
 
                 <div className="mb-8">
                     <h2 className="text-3xl font-bold text-gray-900">
-                        {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create ID' : mode === 'otp' ? 'Verify Identity' : 'Reset Password'}
+                        {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create ID' : mode === 'otp' ? 'Verify Identity' : mode === 'forgot' ? 'Reset Password' : 'New Password'}
                     </h2>
                     <p className="text-gray-500 mt-2">
-                        {mode === 'login' ? 'Enter your credentials to access your dashboard.' : mode === 'register' ? 'Join the decentralized trust network.' : 'Enter the code sent to your email.'}
+                        {mode === 'login' ? 'Enter your credentials to access your dashboard.' : mode === 'register' ? 'Join the decentralized trust network.' : 'Secure verification step.'}
                     </p>
                 </div>
+
+                {/* LOGIC WAKE FEEDBACK */}
+                {isWaking && (
+                    <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-xs rounded animate-pulse border border-blue-100 font-medium">
+                        Server is waking up... this can take up to 30 seconds.
+                    </div>
+                )}
 
                 {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-[#E60012] text-red-700 rounded-r-lg text-sm flex items-center"><span className="mr-2">⚠️</span>{error}</div>}
                 {successMsg && <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r-lg text-sm flex items-center"><span className="mr-2">✅</span>{successMsg}</div>}
@@ -271,7 +246,7 @@ const AuthView = ({ setView }) => {
 
                     {/* ACTION BUTTON */}
                     <button disabled={loading} className={btnClasses}>
-                        {loading ? 'Processing...' : mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Identity' : 'Verify'}
+                        {loading ? 'Processing...' : mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Identity' : mode === 'otp' ? 'Verify & Login' : mode === 'forgot' ? 'Send Reset OTP' : 'Reset Password'}
                     </button>
                 </form>
 
@@ -280,12 +255,8 @@ const AuthView = ({ setView }) => {
                     {mode === 'login' ? (
                         <p>No digital ID yet? <button onClick={() => setMode('register')} className="text-[#002B5C] font-bold hover:underline">Create Account</button></p>
                     ) : (
-                        <p>Already verified? <button onClick={() => setMode('login')} className="text-[#002B5C] font-bold hover:underline">Login here</button></p>
+                        <p>Back to <button onClick={() => setMode('login')} className="text-[#002B5C] font-bold hover:underline">Login</button></p>
                     )}
-                </div>
-                
-                <div className="mt-12 text-center text-xs text-gray-400">
-                    <p>Federal University Dutsin-Ma | Huawei ICT Competition 2025</p>
                 </div>
             </div>
         </div>
@@ -342,5 +313,7 @@ const App = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+window.onload = () => {
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+};

@@ -31,7 +31,7 @@ const ThemeContext = React.createContext(THEME_CONFIG.colors);
 const useTheme = () => React.useContext(ThemeContext);
 
 // ====================================================================
-// --- SERVICE LAYER (Updated Logic) ---
+// --- SERVICE LAYER ---
 // ====================================================================
 const API_BASE_URL = 'https://techtrust-backend.onrender.com/api/auth';
 
@@ -313,7 +313,6 @@ const App = () => {
   );
 };
 
-window.onload = () => {
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-};
+// FIX: Direct Render Call
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);

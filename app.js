@@ -83,7 +83,7 @@ const AuthView = ({ setView }) => {
 
   const [formData, setFormData] = React.useState({
     name: '',
-    email: '',
+    email: '', // Ensure this is bound correctly
     password: '',
     otp: '',
     user_type: 'professional'
@@ -125,6 +125,12 @@ const AuthView = ({ setView }) => {
             setTimeout(() => setMode('login'), 1500);
         } else { setError(result.message); }
       } else if (mode === 'forgot') {
+        // FIXED: Ensure email is passed correctly
+        if (!formData.email) {
+            setError("Please enter your email address.");
+            setLoading(false);
+            return;
+        }
         result = await AuthService.requestPasswordReset(formData.email);
         if (result.success) {
             setMode('reset');
@@ -203,14 +209,23 @@ const AuthView = ({ setView }) => {
                     {mode === 'register' && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">Full Name</label>
-                            <input type="text" name="name" required onChange={handleInputChange} className={inputClasses} placeholder="e.g. Aminu Kano" />
+                            <input type="text" name="name" required onChange={handleInputChange} value={formData.name} className={inputClasses} placeholder="e.g. Aminu Kano" />
                         </div>
                     )}
 
+                    {/* FIXED: Explicit Input for Email to ensure value binding */}
                     {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'otp' || mode === 'reset') && mode !== 'otp' && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">Email Address</label>
-                            <input type="email" name="email" required onChange={handleInputChange} className={inputClasses} placeholder="student@fudma.edu.ng" />
+                            <input 
+                                type="email" 
+                                name="email" 
+                                required 
+                                onChange={handleInputChange} 
+                                value={formData.email} // Bind to state
+                                className={inputClasses} 
+                                placeholder="student@fudma.edu.ng" 
+                            />
                         </div>
                     )}
 
@@ -222,14 +237,14 @@ const AuthView = ({ setView }) => {
                                 </label>
                                 {mode === 'login' && <button type="button" onClick={() => setMode('forgot')} className="text-sm text-[#E60012] hover:underline font-medium">Forgot?</button>}
                             </div>
-                            <input type="password" name="password" required onChange={handleInputChange} className={inputClasses} placeholder="••••••••" />
+                            <input type="password" name="password" required onChange={handleInputChange} value={formData.password} className={inputClasses} placeholder="••••••••" />
                         </div>
                     )}
 
                     {(mode === 'otp' || mode === 'reset') && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">OTP Code</label>
-                            <input type="text" name="otp" required maxLength="6" onChange={handleInputChange} className={`${inputClasses} text-center tracking-[0.5em] text-xl`} placeholder="000000" />
+                            <input type="text" name="otp" required maxLength="6" onChange={handleInputChange} value={formData.otp} className={`${inputClasses} text-center tracking-[0.5em] text-xl`} placeholder="000000" />
                         </div>
                     )}
 

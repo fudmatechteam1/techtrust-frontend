@@ -5,3 +5,53 @@ body {
     flex-direction: column;
     min-height: 100vh;
 }
+
+/* Smooth transitions for all interactive elements */
+* {
+    transition-property: color, background-color, border-color, transform, opacity, box-shadow;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced button hover effects */
+button:not(:disabled):hover {
+    transition-duration: 200ms;
+}
+
+/* Input focus enhancements */
+input:focus,
+textarea:focus,
+select:focus {
+    transition-duration: 150ms;
+}
+
+/* Responsive text sizing */
+@media (max-width: 640px) {
+    .text-6xl {
+        font-size: 2.5rem;
+    }
+    .text-4xl {
+        font-size: 2rem;
+    }
+    .text-3xl {
+        font-size: 1.75rem;
+    }
+}
+
+/* Smooth scroll behavior */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Loading animation */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

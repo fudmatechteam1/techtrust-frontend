@@ -9,6 +9,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="app.css">
+    
+    <!-- Backend URL Configuration -->
+    <!-- Set window.BACKEND_URL before loading app.js to override default -->
+    <!-- Example: <script>window.BACKEND_URL = 'https://your-huawei-cloud-backend.com';</script> -->
+    <script>
+        // Default backend URL - can be overridden by setting window.BACKEND_URL before this script
+        if (typeof window.BACKEND_URL === 'undefined') {
+            // For production, set your Huawei Cloud backend URL here
+            // window.BACKEND_URL = 'https://your-huawei-cloud-backend.com';
+            // For local development, leave undefined to use default (localhost:4000)
+        }
+    </script>
 </head>
 <body>
     

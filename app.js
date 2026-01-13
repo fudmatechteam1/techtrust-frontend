@@ -34,7 +34,7 @@ const useTheme = () => React.useContext(ThemeContext);
 // --- SERVICE LAYER (Huawei Cloud Backend) ---
 // ====================================================================
 // Backend URL - Can be set via environment variable or use default
-const BACKEND_BASE_URL = window.BACKEND_URL || 'http://localhost:4000';
+const BACKEND_BASE_URL = window.BACKEND_URL || 'https://fudmatechteam1.github.io/techtrust-frontend/';
 const API_BASE_URL = `${BACKEND_BASE_URL}/api/auth`;
 const TRUST_SCORE_API_URL = `${BACKEND_BASE_URL}/api/trust-score`;
 

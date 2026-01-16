@@ -191,7 +191,7 @@ const AuthView = ({ setView }) => {
     email: '',
     password: '',
     confirmPassword: '',
-    userType: 'developer',
+    userType: 'professional',
     otp: ''
   });
 

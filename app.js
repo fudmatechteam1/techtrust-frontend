@@ -196,67 +196,163 @@ const AuthView = ({ setView }) => {
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+// ====================================================================
+// FRONTEND FIX: Updated handleSubmit in AuthView component
+// Replace the handleSubmit function in your app.js with this corrected version
+// ====================================================================
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-    setLoading(true);
-    setIsWaking(false);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setSuccessMsg('');
+  setLoading(true);
+  setIsWaking(false);
 
-    // LOGIC WAKE: Start timer for slow Render start
-    const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
+  // LOGIC WAKE: Start timer for slow Render start
+  const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
 
-    try {
-      let result;
-      if (mode === 'login') {
-        result = await AuthService.login({ email: formData.email, password: formData.password });
-        if (result.success) {
-            // Handle both old and new response formats
-            const userData = result.user || result.data?.user || result.data;
-            const role = userData?.userType || userData?.user_type || 'professional';
-            setView(role === 'recruiter' ? 'recruiter' : 'profile');
-        } else { setError(result.message); }
-      } else if (mode === 'register') {
-        result = await AuthService.register({ name: formData.name, email: formData.email, password: formData.password, userType: formData.user_type });
-        if (result.success) {
-            setMode('otp');
-            setSuccessMsg("Account created! Check email for OTP.");
-        } else { setError(result.message); }
-      } else if (mode === 'otp') {
-        // FIXED: Calls correct verify endpoint
-        result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
-        if (result.success) {
-            setSuccessMsg("Verified! Redirecting to login...");
-            setTimeout(() => setMode('login'), 1500);
-        } else { setError(result.message); }
-      } else if (mode === 'forgot') {
-        // FIXED: Ensure email is passed correctly
-        if (!formData.email) {
-            setError("Please enter your email address.");
-            setLoading(false);
-            return;
+  try {
+    let result;
+    
+    if (mode === 'login') {
+      result = await AuthService.login({ email: formData.email, password: formData.password });
+      
+      if (result.success) {
+        // Handle successful login for verified users
+        const userData = result.user || result.data?.user || result.data;
+        const role = userData?.userType || userData?.user_type || 'professional';
+        setView(role === 'recruiter' ? 'recruiter' : 'profile');
+      } else {
+        // FIXED: Check if user needs verification (403 response from backend)
+        if (result.message && result.message.includes('not verified')) {
+          // Unverified user - redirect to OTP screen
+          setMode('otp');
+          setSuccessMsg("Account not verified. Please enter the OTP sent to your email.");
+        } else {
+          setError(result.message);
         }
-        result = await AuthService.requestPasswordReset(formData.email);
-        if (result.success) {
-            setMode('reset');
-            setSuccessMsg("OTP sent to your email.");
-        } else { setError(result.message); }
-      } else if (mode === 'reset') {
-        result = await AuthService.resetPassword({ email: formData.email, otp: formData.otp, newPassword: formData.password });
-        if (result.success) {
-            setSuccessMsg("Password reset! Login now.");
-            setTimeout(() => setMode('login'), 2000);
-        } else { setError(result.message); }
       }
-    } catch (err) { 
-        setError("Connection error. Check your network or CORS settings."); 
-    } finally { 
+      
+    } else if (mode === 'register') {
+      result = await AuthService.register({ 
+        name: formData.name, 
+        email: formData.email, 
+        password: formData.password, 
+        userType: formData.user_type 
+      });
+      
+      if (result.success) {
+        // FIXED: Always redirect to OTP after successful registration
+        // Backend now sends OTP automatically during registration
+        setMode('otp');
+        setSuccessMsg("Account created! An OTP has been sent to your email. Please verify to continue.");
+      } else { 
+        setError(result.message); 
+      }
+      
+    } else if (mode === 'otp') {
+      // Verify OTP
+      result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
+      
+      if (result.success) {
+        setSuccessMsg("Email verified successfully! Redirecting to login...");
+        setTimeout(() => {
+          setMode('login');
+          setFormData(prev => ({ ...prev, otp: '' })); // Clear OTP field
+        }, 1500);
+      } else { 
+        setError(result.message); 
+      }
+      
+    } else if (mode === 'forgot') {
+      if (!formData.email) {
+        setError("Please enter your email address.");
+        setLoading(false);
         clearTimeout(wakingTimer);
-        setLoading(false); 
-        setIsWaking(false);
+        return;
+      }
+      result = await AuthService.requestPasswordReset(formData.email);
+      if (result.success) {
+        setMode('reset');
+        setSuccessMsg("OTP sent to your email.");
+      } else { 
+        setError(result.message); 
+      }
+      
+    } else if (mode === 'reset') {
+      result = await AuthService.resetPassword({ 
+        email: formData.email, 
+        otp: formData.otp, 
+        newPassword: formData.password 
+      });
+      if (result.success) {
+        setSuccessMsg("Password reset successful! Redirecting to login...");
+        setTimeout(() => setMode('login'), 2000);
+      } else { 
+        setError(result.message); 
+      }
     }
-  };
+    
+  } catch (err) {
+    setError(err.message || 'An unexpected error occurred');
+  } finally {
+    clearTimeout(wakingTimer);
+    setIsWaking(false);
+    setLoading(false);
+  }
+};
+
+// ====================================================================
+// ADDITIONAL FIX: Update AuthService.request to handle 403 responses properly
+// ====================================================================
+
+const AuthService = {
+  async request(endpoint, data, method = 'POST') {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      const result = await response.json();
+      
+      // FIXED: Handle 403 for unverified users specially
+      if (response.status === 403 && result.requiresVerification) {
+        return { 
+          success: false, 
+          message: result.message,
+          requiresVerification: true,
+          email: result.email
+        };
+      }
+      
+      if (!response.ok) {
+        const errorMsg = result.error || result.message || 'Server error';
+        throw new Error(errorMsg);
+      }
+      
+      return { 
+        success: true, 
+        data: result.data || result,
+        user: result.user || result.data?.user,
+        requiresVerification: result.requiresVerification || false
+      };
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  login: (data) => AuthService.request('/login', data),
+  register: (data) => AuthService.request('/register', data),
+  requestOtp: (email) => AuthService.request('/sendOtp', { email }),
+  verifyOtp: (data) => AuthService.request('/verify', data),
+  requestPasswordReset: (email) => AuthService.request('/sendResetOtp', { email }),
+  resetPassword: (data) => AuthService.request('/resetPassword', data),
+  logout: () => AuthService.request('/logout', {})
+};
+
 
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none hover:border-gray-400";
   const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";

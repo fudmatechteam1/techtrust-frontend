@@ -179,121 +179,85 @@ const ClaimsService = {
 // ====================================================================
 
 const AuthView = ({ setView }) => {
-  const theme = useTheme();
-  const [view, setViewState] = React.useState('login'); // 'login', 'register', 'verify'
+  const [mode, setMode] = React.useState('login'); 
   const [loading, setLoading] = React.useState(false);
-  const [wakingBackend, setWakingBackend] = React.useState(true);
+  const [isWaking, setIsWaking] = React.useState(false); // LOGIC WAKE: Feedback for delay
   const [error, setError] = React.useState('');
-  const [success, setSuccess] = React.useState('');
-  
+  const [successMsg, setSuccessMsg] = React.useState('');
+
   const [formData, setFormData] = React.useState({
     name: '',
-    email: '',
+    email: '', // Ensure this is bound correctly
     password: '',
-    confirmPassword: '',
-    userType: 'professional',
-    otp: ''
+    otp: '',
+    user_type: 'professional'
   });
-
-  // --- Waking Backend Logic ---
-  React.useEffect(() => {
-    const wakeUpServer = async () => {
-      try {
-        await axios.get(`${API_URL.replace('/api', '')}/health`);
-        setWakingBackend(false);
-      } catch (err) {
-        setWakingBackend(false);
-      }
-    };
-    wakeUpServer();
-  }, []);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (error) setError('');
   };
 
-  // --- Login Handler ---
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setSuccessMsg('');
+    setLoading(true);
+    setIsWaking(false);
+
+    // LOGIC WAKE: Start timer for slow Render start
+    const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
+
     try {
-      const res = await axios.post(`${API_URL}/auth/login`, {
-        email: formData.email,
-        password: formData.password
-      });
-      if (res.data.success) {
-        setSuccess('Login successful!');
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user', JSON.stringify(res.data.user));
-        setTimeout(() => setView(res.data.user.userType === 'recruiter' ? 'recruiter' : 'profile'), 1000);
+      let result;
+      if (mode === 'login') {
+        result = await AuthService.login({ email: formData.email, password: formData.password });
+        if (result.success) {
+            // Handle both old and new response formats
+            const userData = result.user || result.data?.user || result.data;
+            const role = userData?.userType || userData?.user_type || 'professional';
+            setView(role === 'recruiter' ? 'recruiter' : 'profile');
+        } else { setError(result.message); }
+      } else if (mode === 'register') {
+        result = await AuthService.register({ name: formData.name, email: formData.email, password: formData.password, userType: formData.user_type });
+        if (result.success) {
+            setMode('otp');
+            setSuccessMsg("Account created! Check email for OTP.");
+        } else { setError(result.message); }
+      } else if (mode === 'otp') {
+        // FIXED: Calls correct verify endpoint
+        result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
+        if (result.success) {
+            setSuccessMsg("Verified! Redirecting to login...");
+            setTimeout(() => setMode('login'), 1500);
+        } else { setError(result.message); }
+      } else if (mode === 'forgot') {
+        // FIXED: Ensure email is passed correctly
+        if (!formData.email) {
+            setError("Please enter your email address.");
+            setLoading(false);
+            return;
+        }
+        result = await AuthService.requestPasswordReset(formData.email);
+        if (result.success) {
+            setMode('reset');
+            setSuccessMsg("OTP sent to your email.");
+        } else { setError(result.message); }
+      } else if (mode === 'reset') {
+        result = await AuthService.resetPassword({ email: formData.email, otp: formData.otp, newPassword: formData.password });
+        if (result.success) {
+            setSuccessMsg("Password reset! Login now.");
+            setTimeout(() => setMode('login'), 2000);
+        } else { setError(result.message); }
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Login failed';
-      if (err.response?.status === 403) {
-        setError('Please verify your account first.');
-        setViewState('verify');
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setLoading(false);
+    } catch (err) { 
+        setError("Connection error. Check your network or CORS settings."); 
+    } finally { 
+        clearTimeout(wakingTimer);
+        setLoading(false); 
+        setIsWaking(false);
     }
   };
 
-  // --- Register Handler ---
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await axios.post(`${API_URL}/auth/register`, {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        userType: formData.userType
-      });
-      if (res.data.success) {
-        setSuccess('OTP sent to your email!');
-        setTimeout(() => {
-          setSuccess('');
-          setViewState('verify');
-        }, 1500);
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // --- Verify Handler ---
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await axios.post(`${API_URL}/auth/verify`, {
-        email: formData.email,
-        otp: formData.otp
-      });
-      if (res.data.success) {
-        setSuccess('Verification successful!');
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user', JSON.stringify(res.data.user));
-        setTimeout(() => setView('profile'), 1500);
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Invalid OTP');
-    } finally {
-      setLoading(false);
-    }
-  };
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none hover:border-gray-400";
   const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
 

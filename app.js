@@ -1077,10 +1077,10 @@ const RecruiterView = () => {
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/api/trust-score/vetted-pros`, {
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
+       headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    }
       });
       const result = await response.json();
       

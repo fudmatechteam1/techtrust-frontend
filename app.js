@@ -1076,12 +1076,22 @@ const RecruiterView = () => {
   const loadProfessionals = async () => {
     setLoading(true);
     try {
+      // 1. GET THE KEY: Define the token variable first
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error("No token found. Please log in again.");
+        return;
+      }
+
+      // 2. USE THE KEY: Now 'token' exists and can be used in the header
       const response = await fetch(`${BACKEND_URL}/api/trust-score/vetted-pros`, {
-       headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
       const result = await response.json();
       
       if (result.success && Array.isArray(result.data)) {
@@ -1090,8 +1100,6 @@ const RecruiterView = () => {
       }
     } catch (err) {
       console.error('Failed to load professionals:', err);
-      setProfessionals([]);
-      setFilteredProfessionals([]);
     } finally {
       setLoading(false);
     }

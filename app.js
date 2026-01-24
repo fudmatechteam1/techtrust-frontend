@@ -120,7 +120,7 @@ const TrustScoreService = {
 const ProfileService = {
     async request(endpoint, data, method = 'POST') {
         try {
-            const response = await fetch(`${BACKEND_BASE_URL}/api/profile${endpoint}`, {
+            const response = await fetch(`http://localhost:5000/api/profile${endpoint}`, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -142,6 +142,7 @@ const ProfileService = {
     fetchAll: (userId) => ProfileService.request(`/fetch1/${userId}`, null, 'GET'),
     fetchUserById: (userId) => ProfileService.request(`/fetch-user/${userId}`, null, 'GET'),
     fetchById: (profileId) => ProfileService.request(`/fetch-profile/${profileId}`, null, 'GET'),
+    fetchMyProfile: () => ProfileService.request('/my-profile', null, 'GET'),
     updateProfile: (data) => ProfileService.request('/Edit-profile', data, 'PUT')
 };
 
@@ -149,7 +150,7 @@ const ProfileService = {
 const ClaimsService = {
     async request(endpoint, data, method = 'POST') {
         try {
-            const response = await fetch(`${BACKEND_BASE_URL}/api/claims${endpoint}`, {
+            const response = await fetch(`http://localhost:5000/api/claims${endpoint}`, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -160,9 +161,7 @@ const ClaimsService = {
                 const errorMsg = result.error || result.message || 'Server error';
                 throw new Error(errorMsg);
             }
-            // Handle both array and object responses
-            const claimsData = Array.isArray(result.message) ? result.message : (result.data || result);
-            return { success: true, data: claimsData };
+            return { success: true, data: result.message || result.data || result };
         } catch (error) {
             console.error(`Claims API Error (${endpoint}):`, error);
             return { success: false, message: error.message };
@@ -170,8 +169,8 @@ const ClaimsService = {
     },
 
     submitClaim: (claim) => ClaimsService.request('/claim', { claim }),
-    deleteClaim: (claimId) => ClaimsService.request(`/remove/${claimId}`, null, 'DELETE'),
-    fetchAllClaims: () => ClaimsService.request('/fetch', null, 'GET')
+    fetchAll: () => ClaimsService.request('/fetch', null, 'GET'),
+    deleteClaim: (claimId) => ClaimsService.request(`/remove/${claimId}`, null, 'DELETE')
 };
 
 // ====================================================================
@@ -181,13 +180,13 @@ const ClaimsService = {
 const AuthView = ({ setView }) => {
   const [mode, setMode] = React.useState('login'); 
   const [loading, setLoading] = React.useState(false);
-  const [isWaking, setIsWaking] = React.useState(false); // LOGIC WAKE: Feedback for delay
+  const [isWaking, setIsWaking] = React.useState(false);
   const [error, setError] = React.useState('');
   const [successMsg, setSuccessMsg] = React.useState('');
 
   const [formData, setFormData] = React.useState({
     name: '',
-    email: '', // Ensure this is bound correctly
+    email: '',
     password: '',
     otp: '',
     user_type: 'professional'
@@ -196,173 +195,104 @@ const AuthView = ({ setView }) => {
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-// ====================================================================
-// FRONTEND FIX: Updated handleSubmit in AuthView component
-// Replace the handleSubmit function in your app.js with this corrected version
-// ====================================================================
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setSuccessMsg('');
-  setLoading(true);
-  setIsWaking(false);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+    setLoading(true);
+    setIsWaking(false);
 
-  // LOGIC WAKE: Start timer for slow Render start
-  const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
+    const wakingTimer = setTimeout(() => setIsWaking(true), 3000);
 
-  try {
-    let result;
-    
-    if (mode === 'login') {
-      result = await AuthService.login({ email: formData.email, password: formData.password });
+    try {
+      let result;
       
-      if (result.success) {
-        // Handle successful login for verified users
-        const userData = result.user || result.data?.user || result.data;
-        const role = userData?.userType || userData?.user_type || 'professional';
-        setView(role === 'recruiter' ? 'recruiter' : 'profile');
-      } else {
-        // FIXED: Check if user needs verification (403 response from backend)
-        if (result.message && result.message.includes('not verified')) {
-          // Unverified user - redirect to OTP screen
-          setMode('otp');
-          setSuccessMsg("Account not verified. Please enter the OTP sent to your email.");
+      if (mode === 'login') {
+        result = await AuthService.login({ email: formData.email, password: formData.password });
+        
+        if (result.success) {
+          const userData = result.user || result.data?.user || result.data;
+          const role = userData?.userType || userData?.user_type || 'professional';
+          setView(role === 'recruiter' ? 'recruiter' : 'profile');
         } else {
-          setError(result.message);
+          if (result.message && result.message.includes('not verified')) {
+            setMode('otp');
+            setSuccessMsg("Account not verified. Please enter the OTP sent to your email.");
+          } else {
+            setError(result.message);
+          }
+        }
+      } else if (mode === 'register') {
+        result = await AuthService.register({ 
+          name: formData.name, 
+          email: formData.email, 
+          password: formData.password, 
+          userType: formData.user_type 
+        });
+        
+        if (result.success) {
+          setMode('otp');
+          setSuccessMsg("Account created! An OTP has been sent to your email. Please verify to continue.");
+        } else { 
+          setError(result.message); 
+        }
+      } else if (mode === 'otp') {
+        result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
+        
+        if (result.success) {
+          setSuccessMsg("Email verified successfully! Redirecting to login...");
+          setTimeout(() => {
+            setMode('login');
+            setFormData(prev => ({ ...prev, otp: '' }));
+          }, 1500);
+        } else { 
+          setError(result.message); 
+        }
+      } else if (mode === 'forgot') {
+        if (!formData.email) {
+          setError("Please enter your email address.");
+          setLoading(false);
+          clearTimeout(wakingTimer);
+          return;
+        }
+        result = await AuthService.requestPasswordReset(formData.email);
+        if (result.success) {
+          setMode('reset');
+          setSuccessMsg("OTP sent to your email.");
+        } else { 
+          setError(result.message); 
+        }
+      } else if (mode === 'reset') {
+        result = await AuthService.resetPassword({ 
+          email: formData.email, 
+          otp: formData.otp, 
+          newPassword: formData.password 
+        });
+        if (result.success) {
+          setSuccessMsg("Password reset successful! Redirecting to login...");
+          setTimeout(() => setMode('login'), 2000);
+        } else { 
+          setError(result.message); 
         }
       }
       
-    } else if (mode === 'register') {
-      result = await AuthService.register({ 
-        name: formData.name, 
-        email: formData.email, 
-        password: formData.password, 
-        userType: formData.user_type 
-      });
-      
-      if (result.success) {
-        // FIXED: Always redirect to OTP after successful registration
-        // Backend now sends OTP automatically during registration
-        setMode('otp');
-        setSuccessMsg("Account created! An OTP has been sent to your email. Please verify to continue.");
-      } else { 
-        setError(result.message); 
-      }
-      
-    } else if (mode === 'otp') {
-      // Verify OTP
-      result = await AuthService.verifyOtp({ email: formData.email, otp: formData.otp });
-      
-      if (result.success) {
-        setSuccessMsg("Email verified successfully! Redirecting to login...");
-        setTimeout(() => {
-          setMode('login');
-          setFormData(prev => ({ ...prev, otp: '' })); // Clear OTP field
-        }, 1500);
-      } else { 
-        setError(result.message); 
-      }
-      
-    } else if (mode === 'forgot') {
-      if (!formData.email) {
-        setError("Please enter your email address.");
-        setLoading(false);
-        clearTimeout(wakingTimer);
-        return;
-      }
-      result = await AuthService.requestPasswordReset(formData.email);
-      if (result.success) {
-        setMode('reset');
-        setSuccessMsg("OTP sent to your email.");
-      } else { 
-        setError(result.message); 
-      }
-      
-    } else if (mode === 'reset') {
-      result = await AuthService.resetPassword({ 
-        email: formData.email, 
-        otp: formData.otp, 
-        newPassword: formData.password 
-      });
-      if (result.success) {
-        setSuccessMsg("Password reset successful! Redirecting to login...");
-        setTimeout(() => setMode('login'), 2000);
-      } else { 
-        setError(result.message); 
-      }
+    } catch (err) {
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      clearTimeout(wakingTimer);
+      setIsWaking(false);
+      setLoading(false);
     }
-    
-  } catch (err) {
-    setError(err.message || 'An unexpected error occurred');
-  } finally {
-    clearTimeout(wakingTimer);
-    setIsWaking(false);
-    setLoading(false);
-  }
-};
-
-// ====================================================================
-// ADDITIONAL FIX: Update AuthService.request to handle 403 responses properly
-// ====================================================================
-
-const AuthService = {
-  async request(endpoint, data, method = 'POST') {
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-      const result = await response.json();
-      
-      // FIXED: Handle 403 for unverified users specially
-      if (response.status === 403 && result.requiresVerification) {
-        return { 
-          success: false, 
-          message: result.message,
-          requiresVerification: true,
-          email: result.email
-        };
-      }
-      
-      if (!response.ok) {
-        const errorMsg = result.error || result.message || 'Server error';
-        throw new Error(errorMsg);
-      }
-      
-      return { 
-        success: true, 
-        data: result.data || result,
-        user: result.user || result.data?.user,
-        requiresVerification: result.requiresVerification || false
-      };
-    } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
-      return { success: false, message: error.message };
-    }
-  },
-
-  login: (data) => AuthService.request('/login', data),
-  register: (data) => AuthService.request('/register', data),
-  requestOtp: (email) => AuthService.request('/sendOtp', { email }),
-  verifyOtp: (data) => AuthService.request('/verify', data),
-  requestPasswordReset: (email) => AuthService.request('/sendResetOtp', { email }),
-  resetPassword: (data) => AuthService.request('/resetPassword', data),
-  logout: () => AuthService.request('/logout', {})
-};
-
+  };
 
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none hover:border-gray-400";
-  const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
+  const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
 
-  // Using the image from your uploaded file
   const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1";
 
   return (
     <div className="flex w-full h-screen bg-gray-100 overflow-hidden">
-        {/* LEFT PANEL - BRANDING (Static) */}
         <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden bg-cover bg-center transition-transform duration-300 hover:scale-[1.02]" style={{backgroundImage: `url(${bgImage})`}}>
             <div className="absolute inset-0 bg-[#002B5C] opacity-85 transition-opacity duration-300 hover:opacity-80"></div>
             <div className="relative z-10 text-center px-12 text-white">
@@ -381,7 +311,6 @@ const AuthService = {
             </div>
         </div>
 
-        {/* RIGHT PANEL - FORM */}
         <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white relative">
             <div className="w-full max-w-md">
                 
@@ -395,7 +324,6 @@ const AuthService = {
                     </h2>
                 </div>
 
-                {/* LOGIC WAKE FEEDBACK */}
                 {isWaking && (
                     <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-xs rounded animate-pulse border border-blue-100 font-medium">
                         Server is waking up... this can take up to 30 seconds.
@@ -406,8 +334,6 @@ const AuthService = {
                 {successMsg && <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r-lg text-sm flex items-center"><span className="mr-2">✅</span>{successMsg}</div>}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                    
-                    {/* INPUT FIELDS */}
                     {mode === 'register' && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">Full Name</label>
@@ -415,7 +341,6 @@ const AuthService = {
                         </div>
                     )}
 
-                    {/* FIXED: Explicit Input for Email to ensure value binding */}
                     {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'otp' || mode === 'reset') && mode !== 'otp' && (
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-gray-700">Email Address</label>
@@ -424,7 +349,7 @@ const AuthService = {
                                 name="email" 
                                 required 
                                 onChange={handleInputChange} 
-                                value={formData.email} // Bind to state
+                                value={formData.email}
                                 className={inputClasses} 
                                 placeholder="student@fudma.edu.ng" 
                             />
@@ -450,7 +375,6 @@ const AuthService = {
                         </div>
                     )}
 
-                    {/* ROLE SELECTION (Register Only) */}
                     {mode === 'register' && (
                         <div className="grid grid-cols-2 gap-4 pt-2">
                             <label className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-all duration-200 transform hover:scale-105 hover:shadow-md ${formData.user_type === 'professional' ? 'border-[#002B5C] bg-blue-50 ring-2 ring-[#002B5C] shadow-sm' : 'border-gray-200 hover:border-[#002B5C] hover:bg-blue-50/50'}`}>
@@ -466,13 +390,11 @@ const AuthService = {
                         </div>
                     )}
 
-                    {/* ACTION BUTTON */}
                     <button disabled={loading} className={btnClasses}>
                         {loading ? 'Processing...' : mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Identity' : mode === 'otp' ? 'Verify & Login' : mode === 'forgot' ? 'Send Reset OTP' : 'Reset Password'}
                     </button>
                 </form>
 
-                {/* FOOTER LINKS */}
                 <div className="mt-8 text-center text-sm text-gray-500">
                     {mode === 'login' ? (
                         <p>No digital ID yet? <button onClick={() => setMode('register')} className="text-[#002B5C] font-bold hover:text-[#001f42] hover:underline transition-colors duration-200">Create Account</button></p>
@@ -486,43 +408,13 @@ const AuthService = {
   );
 };
 
-// ====================================================================
-// --- APP CONTAINER & ROUTING ---
-// ====================================================================
-
-const Header = ({ currentView, setView, toggleTheme, themeMode }) => {
-  return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div 
-                className="flex items-center space-x-2 cursor-pointer group transition-all duration-200"
-                onClick={() => setView('profile')}
-            >
-                <div className="w-8 h-8 rounded bg-[#002B5C] flex items-center justify-center text-white font-bold group-hover:bg-[#001f42] transition-colors duration-200 shadow-md group-hover:shadow-lg transform group-hover:scale-105">
-                    T
-                </div>
-                <h1 className="text-xl font-bold text-[#002B5C] dark:text-white group-hover:text-[#001f42] transition-colors duration-200">
-                    TechTrust
-                </h1>
-            </div>
-            <button 
-                onClick={async () => { await AuthService.logout(); setView('login'); }} 
-                className="text-sm font-medium text-gray-500 hover:text-[#E60012] transition-colors duration-200 px-3 py-1 rounded-md hover:bg-red-50"
-            >
-                Sign Out
-            </button>
-        </div>
-    </header>
-  );
-};
-
 // Trust Score Visualization Component
 const TrustScoreGauge = ({ score, maxScore = 10 }) => {
   const percentage = Math.min((score / maxScore) * 100, 100);
   const getColor = () => {
-    if (score >= 7) return '#69F0AE'; // Success green
-    if (score >= 4) return '#FFD700'; // Warning yellow
-    return '#E60012'; // Huawei Red
+    if (score >= 7) return '#69F0AE';
+    if (score >= 4) return '#FFD700';
+    return '#E60012';
   };
   const getLabel = () => {
     if (score >= 7) return 'High';
@@ -533,10 +425,8 @@ const TrustScoreGauge = ({ score, maxScore = 10 }) => {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="relative">
-        {/* Circular Progress Ring */}
         <div className="relative w-48 h-48 mx-auto">
           <svg className="transform -rotate-90 w-48 h-48">
-            {/* Background Circle */}
             <circle
               cx="96"
               cy="96"
@@ -545,7 +435,6 @@ const TrustScoreGauge = ({ score, maxScore = 10 }) => {
               strokeWidth="16"
               fill="none"
             />
-            {/* Progress Circle */}
             <circle
               cx="96"
               cy="96"
@@ -559,7 +448,6 @@ const TrustScoreGauge = ({ score, maxScore = 10 }) => {
               className="transition-all duration-1000 ease-out"
             />
           </svg>
-          {/* Center Content */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-5xl font-bold" style={{ color: getColor() }}>
               {score.toFixed(1)}
@@ -601,10 +489,17 @@ const ProfileView = () => {
     currentTrustScore: ''
   });
   const [claimForm, setClaimForm] = React.useState({ claim: '' });
+  const [showProfileModal, setShowProfileModal] = React.useState(false);
+  const [profileData, setProfileData] = React.useState({
+    skillsArray: '',
+    experience: '',
+    claimText: ''
+  });
+  const [isSaving, setIsSaving] = React.useState(false);
 
   const loadClaims = async () => {
     try {
-      const result = await ClaimsService.fetchAllClaims();
+      const result = await ClaimsService.fetchAll();
       if (result.success) {
         setClaims(Array.isArray(result.data) ? result.data : []);
       }
@@ -708,6 +603,48 @@ const ProfileView = () => {
     }
   };
 
+  const handleOpenProfile = async () => {
+    setShowProfileModal(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const result = await ProfileService.fetchMyProfile();
+      if (result.success && result.data) {
+        const d = result.data;
+        setProfileData({
+          skillsArray: d.skillsArray || '',
+          experience: d.experience || '',
+          claimText: d.claimText || ''
+        });
+      } else {
+        setProfileData({ skillsArray: '', experience: '', claimText: '' });
+      }
+    } catch (err) {
+      setProfileData({ skillsArray: '', experience: '', claimText: '' });
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const result = await ProfileService.addExperience(profileData);
+      if (result.success) {
+        setShowProfileModal(false);
+        setSuccessMsg('Profile updated successfully!');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      } else {
+        setError(result.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      setError('Connection error. Please check your network.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] transition-all outline-none hover:border-gray-400";
   const btnClasses = "px-6 py-3 rounded-lg font-semibold text-white shadow-md bg-[#002B5C] hover:bg-[#001f42] hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
 
@@ -736,7 +673,6 @@ const ProfileView = () => {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="bg-white rounded-t-xl shadow-lg border-b border-gray-200">
           <div className="flex flex-wrap gap-2 px-4 sm:px-6">
             <button onClick={() => setActiveTab('trust-score')} className={tabClasses(activeTab === 'trust-score')}>
@@ -754,12 +690,9 @@ const ProfileView = () => {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="bg-white rounded-b-xl shadow-lg p-6 lg:p-8">
-          {/* Trust Score Tab */}
           {activeTab === 'trust-score' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-              {/* Left Panel - Input Form */}
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">GitHub Profile Information</h2>
                 
@@ -770,117 +703,68 @@ const ProfileView = () => {
                 )}
 
                 <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">GitHub Username *</label>
-                <input
-                  type="text"
-                  value={profileForm.username}
-                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
-                  className={inputClasses}
-                  placeholder="octocat"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">GitHub Username *</label>
+                    <input
+                      type="text"
+                      value={profileForm.username}
+                      onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                      className={inputClasses}
+                      placeholder="octocat"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Stars</label>
-                  <input
-                    type="number"
-                    value={profileForm.totalStars}
-                    onChange={(e) => setProfileForm({ ...profileForm, totalStars: e.target.value })}
-                    className={inputClasses}
-                    placeholder="1500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Forks</label>
-                  <input
-                    type="number"
-                    value={profileForm.totalForks}
-                    onChange={(e) => setProfileForm({ ...profileForm, totalForks: e.target.value })}
-                    className={inputClasses}
-                    placeholder="300"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Stars</label>
+                      <input
+                        type="number"
+                        value={profileForm.totalStars}
+                        onChange={(e) => setProfileForm({ ...profileForm, totalStars: e.target.value })}
+                        className={inputClasses}
+                        placeholder="1500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Forks</label>
+                      <input
+                        type="number"
+                        value={profileForm.totalForks}
+                        onChange={(e) => setProfileForm({ ...profileForm, totalForks: e.target.value })}
+                        className={inputClasses}
+                        placeholder="300"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Issues</label>
-                  <input
-                    type="number"
-                    value={profileForm.totalIssues}
-                    onChange={(e) => setProfileForm({ ...profileForm, totalIssues: e.target.value })}
-                    className={inputClasses}
-                    placeholder="50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Pull Requests</label>
-                  <input
-                    type="number"
-                    value={profileForm.totalPRs}
-                    onChange={(e) => setProfileForm({ ...profileForm, totalPRs: e.target.value })}
-                    className={inputClasses}
-                    placeholder="120"
-                  />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Languages (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={profileForm.languages}
+                      onChange={(e) => setProfileForm({ ...profileForm, languages: e.target.value })}
+                      className={inputClasses}
+                      placeholder="Python, JavaScript, Go"
+                    />
+                  </div>
+
+                  <button
+                    onClick={fetchTrustScore}
+                    disabled={loading || !profileForm.username}
+                    className={btnClasses + " w-full"}
+                  >
+                    {loading ? 'Calculating...' : 'Calculate Trust Score'}
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Contributors</label>
-                  <input
-                    type="number"
-                    value={profileForm.totalContributors}
-                    onChange={(e) => setProfileForm({ ...profileForm, totalContributors: e.target.value })}
-                    className={inputClasses}
-                    placeholder="25"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Repository Count</label>
-                  <input
-                    type="number"
-                    value={profileForm.repoCount}
-                    onChange={(e) => setProfileForm({ ...profileForm, repoCount: e.target.value })}
-                    className={inputClasses}
-                    placeholder="15"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Languages (comma-separated)</label>
-                <input
-                  type="text"
-                  value={profileForm.languages}
-                  onChange={(e) => setProfileForm({ ...profileForm, languages: e.target.value })}
-                  className={inputClasses}
-                  placeholder="Python, JavaScript, Go"
-                />
-              </div>
-
-              <button
-                onClick={fetchTrustScore}
-                disabled={loading || !profileForm.username}
-                className={btnClasses + " w-full"}
-              >
-                {loading ? 'Calculating...' : 'Calculate Trust Score'}
-              </button>
-              </div>
-              </div>
-
-              {/* Right Panel - Trust Score Visualization */}
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Trust Score Analysis</h2>
             
             {trustScoreData ? (
               <div className="space-y-6">
-                {/* Trust Score Gauge */}
                 <TrustScoreGauge score={trustScoreData.trust_score || 0} />
 
-                {/* Score Breakdown */}
                 <div className="space-y-4 mt-8">
                   <div>
                     <div className="flex justify-between mb-2">
@@ -894,43 +778,6 @@ const ProfileView = () => {
                       ></div>
                     </div>
                   </div>
-
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span className="text-sm font-semibold text-gray-700">Credential Score</span>
-                      <span className="text-sm font-bold text-[#E60012]">{trustScoreData.credential_score?.toFixed(2) || '0.00'}/10</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div
-                        className="bg-[#E60012] h-2.5 rounded-full transition-all duration-500"
-                        style={{ width: `${((trustScoreData.credential_score || 0) / 10) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">Confidence Level</span>
-                      <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-                        trustScoreData.confidence_level === 'High' ? 'bg-green-100 text-green-700' :
-                        trustScoreData.confidence_level === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {trustScoreData.confidence_level || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Credentials Info */}
-                  {trustScoreData.credentials_info && (
-                    <div className="pt-4 border-t border-gray-200">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Credentials Summary</h3>
-                      <div className="text-xs text-gray-600 space-y-1">
-                        <p>Verified: {trustScoreData.credentials_info.verified_count || 0}</p>
-                        <p>Total Submitted: {trustScoreData.credentials_info.total_submitted || 0}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (
@@ -945,113 +792,201 @@ const ProfileView = () => {
             </div>
           )}
 
-        {/* Profile Tab */}
-        {activeTab === 'profile' && (
-          <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Profile & Experience</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Skills (comma-separated) *</label>
-                <input
-                  type="text"
-                  value={experienceForm.skillsArray}
-                  onChange={(e) => setExperienceForm({ ...experienceForm, skillsArray: e.target.value })}
-                  className={inputClasses}
-                  placeholder="React, Node.js, Python, AWS"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Experience *</label>
-                <textarea
-                  value={experienceForm.experience}
-                  onChange={(e) => setExperienceForm({ ...experienceForm, experience: e.target.value })}
-                  className={inputClasses + " min-h-[120px]"}
-                  placeholder="Describe your professional experience..."
-                  rows="5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Professional Claim *</label>
-                <textarea
-                  value={experienceForm.claimText}
-                  onChange={(e) => setExperienceForm({ ...experienceForm, claimText: e.target.value })}
-                  className={inputClasses + " min-h-[100px]"}
-                  placeholder="What makes you stand out? Your key achievements..."
-                  rows="4"
-                />
-              </div>
-              <button onClick={saveExperience} disabled={loading} className={btnClasses + " w-full"}>
-                {loading ? 'Saving...' : 'Save Profile'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Claims Tab */}
-        {activeTab === 'claims' && (
-          <div className="max-w-3xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Claims</h2>
-            <div className="mb-8 p-6 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit New Claim</h3>
+          {activeTab === 'profile' && (
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center justify-between">
+                Profile & Experience
+                <button
+                  className="ml-4 px-4 py-2 rounded bg-[#002B5C] text-white font-semibold hover:bg-[#001f42] transition-colors text-sm"
+                  onClick={handleOpenProfile}
+                  type="button"
+                >
+                  Edit Profile
+                </button>
+              </h2>
               <div className="space-y-4">
-                <textarea
-                  value={claimForm.claim}
-                  onChange={(e) => setClaimForm({ claim: e.target.value })}
-                  className={inputClasses + " min-h-[100px]"}
-                  placeholder="Enter your professional claim or achievement..."
-                  rows="4"
-                />
-                <button onClick={submitClaim} disabled={loading} className={btnClasses}>
-                  {loading ? 'Submitting...' : 'Submit Claim'}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Skills (comma-separated) *</label>
+                  <input
+                    type="text"
+                    value={experienceForm.skillsArray}
+                    onChange={(e) => setExperienceForm({ ...experienceForm, skillsArray: e.target.value })}
+                    className={inputClasses}
+                    placeholder="React, Node.js, Python, AWS"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Experience *</label>
+                  <textarea
+                    value={experienceForm.experience}
+                    onChange={(e) => setExperienceForm({ ...experienceForm, experience: e.target.value })}
+                    className={inputClasses + " min-h-[120px]"}
+                    placeholder="Describe your professional experience..."
+                    rows="5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Professional Claim *</label>
+                  <textarea
+                    value={experienceForm.claimText}
+                    onChange={(e) => setExperienceForm({ ...experienceForm, claimText: e.target.value })}
+                    className={inputClasses + " min-h-[100px]"}
+                    placeholder="What makes you stand out? Your key achievements..."
+                    rows="4"
+                  />
+                </div>
+                <button onClick={saveExperience} disabled={loading} className={btnClasses + " w-full"}>
+                  {loading ? 'Saving...' : 'Save Profile'}
                 </button>
               </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Claims</h3>
-              {claims.length > 0 ? (
-                <div className="space-y-3">
-                  {claims.map((claim, index) => (
-                    <div key={claim._id || index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-start">
-                      <p className="text-gray-700 flex-1">{claim.claim}</p>
+              
+              {showProfileModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                  <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg relative">
+                    <button
+                      className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold"
+                      onClick={() => setShowProfileModal(false)}
+                      type="button"
+                      aria-label="Close"
+                    >
+                      &times;
+                    </button>
+                    <h3 className="text-xl font-bold mb-4">Edit Profile</h3>
+                    <form onSubmit={handleSaveProfile} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Skills (comma-separated)</label>
+                        <input
+                          type="text"
+                          value={profileData.skillsArray}
+                          onChange={e => setProfileData({ ...profileData, skillsArray: e.target.value })}
+                          className={inputClasses}
+                          placeholder="React, Node.js, Python, AWS"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Experience</label>
+                        <textarea
+                          value={profileData.experience}
+                          onChange={e => setProfileData({ ...profileData, experience: e.target.value })}
+                          className={inputClasses + " min-h-[120px]"}
+                          placeholder="Describe your professional experience..."
+                          rows="5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Professional Claim</label>
+                        <textarea
+                          value={profileData.claimText}
+                          onChange={e => setProfileData({ ...profileData, claimText: e.target.value })}
+                          className={inputClasses + " min-h-[100px]"}
+                          placeholder="What makes you stand out? Your key achievements..."
+                          rows="4"
+                        />
+                      </div>
                       <button
-                        onClick={async () => {
-                          if (confirm('Delete this claim?')) {
-                            const result = await ClaimsService.deleteClaim(claim._id);
-                            if (result.success) {
-                              loadClaims();
-                              setSuccessMsg('Claim deleted successfully');
-                              setTimeout(() => setSuccessMsg(''), 3000);
-                            }
-                          }
-                        }}
-                        className="ml-4 text-red-600 hover:text-red-800 text-sm font-medium"
+                        type="submit"
+                        className={btnClasses + " w-full"}
+                        disabled={isSaving}
                       >
-                        Delete
+                        {isSaving ? 'Saving...' : 'Save Changes'}
                       </button>
-                    </div>
-                  ))}
+                    </form>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">No claims submitted yet</p>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Credentials Tab */}
-        {activeTab === 'credentials' && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Credentials</h2>
-            <p className="text-gray-600 mb-6">Add and manage your professional certifications and credentials</p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-              <p className="text-blue-700">Credential management coming soon...</p>
-              <p className="text-sm text-blue-600 mt-2">You can add credentials when calculating your trust score</p>
+          {activeTab === 'claims' && (
+            <div className="max-w-3xl">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Claims</h2>
+              <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit New Claim</h3>
+                <div className="space-y-4">
+                  <textarea
+                    value={claimForm.claim}
+                    onChange={(e) => setClaimForm({ claim: e.target.value })}
+                    className={inputClasses + " min-h-[100px]"}
+                    placeholder="Enter your professional claim or achievement..."
+                    rows="4"
+                  />
+                  <button onClick={submitClaim} disabled={loading} className={btnClasses + " w-full"}>
+                    {loading ? 'Submitting...' : 'Submit Claim'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Claims</h3>
+                {claims.length > 0 ? (
+                  <div className="space-y-3">
+                    {claims.map((claim, index) => (
+                      <div key={claim._id || index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-start">
+                        <p className="text-gray-700 flex-1">{claim.claim}</p>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Delete this claim?')) {
+                              const result = await ClaimsService.deleteClaim(claim._id);
+                              if (result.success) {
+                                loadClaims();
+                                setSuccessMsg('Claim deleted successfully');
+                                setTimeout(() => setSuccessMsg(''), 3000);
+                              }
+                            }
+                          }}
+                          className="ml-4 text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-8">No claims submitted yet</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {activeTab === 'credentials' && (
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Credentials</h2>
+              <p className="text-gray-600 mb-6">Add and manage your professional certifications and credentials</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+                <p className="text-blue-700">Credential management coming soon...</p>
+                <p className="text-sm text-blue-600 mt-2">You can add credentials when calculating your trust score</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+};
+
+// Header Component
+const Header = ({ currentView, setView, toggleTheme, themeMode }) => {
+  return (
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div 
+                className="flex items-center space-x-2 cursor-pointer group transition-all duration-200"
+                onClick={() => setView('profile')}
+            >
+                <div className="w-8 h-8 rounded bg-[#002B5C] flex items-center justify-center text-white font-bold group-hover:bg-[#001f42] transition-colors duration-200 shadow-md group-hover:shadow-lg transform group-hover:scale-105">
+                    T
+                </div>
+                <h1 className="text-xl font-bold text-[#002B5C] dark:text-white group-hover:text-[#001f42] transition-colors duration-200">
+                    TechTrust
+                </h1>
+            </div>
+            <button 
+                onClick={async () => { await AuthService.logout(); setView('login'); }} 
+                className="text-sm font-medium text-gray-500 hover:text-[#E60012] transition-colors duration-200 px-3 py-1 rounded-md hover:bg-red-50"
+            >
+                Sign Out
+            </button>
+        </div>
+    </header>
   );
 };
 

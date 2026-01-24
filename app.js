@@ -1074,23 +1074,45 @@ const RecruiterView = () => {
 
   // 1. UPDATED: Fetching from our new Vetted Professionals endpoint
   const loadProfessionals = async () => {
-    setLoading(true);
-    try {
-      // Load from backend - for now using placeholder
-      const result = await ProfileService.fetchAll('all');
-      if (result.success && Array.isArray(result.data)) {
-        setProfessionals(result.data);
-        setFilteredProfessionals(result.data);
-      }
-    } catch (err) {
-      console.error('Failed to load professionals:', err);
-      setProfessionals([]);
-      setFilteredProfessionals([]);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const result = await ProfileService.fetchAll('all');
+    if (result.success && Array.isArray(result.data)) {
+      
+      // UNIQUE FILTER: Keeps only the latest card per user ID
+      const uniqueData = Array.from(
+        new Map(result.data.map(item => [item.user?._id || item._id, item])).values(
+
+          <div key={professional._id || index} className="...">
+  <div className="flex justify-between items-start mb-4">
+    <div>
+      {/* 1. FIXED: Checks user object first to get the real name */}
+      <h3 className="text-lg font-bold text-gray-900">
+        {professional.user?.name || professional.name || 'Anonymous Pro'}
+      </h3>
+      <p className="text-sm text-gray-500">
+        {professional.user?.email || professional.email || 'N/A'}
+      </p>
+    </div>
+    {/* ... score display ... */}
+  </div>
+</div>
+
+        )
+      );
+
+      setProfessionals(uniqueData);
+      setFilteredProfessionals(uniqueData);
     }
-  };
-  
+  } catch (err) {
+    console.error('Failed to load professionals:', err);
+    setProfessionals([]);
+    setFilteredProfessionals([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
   const loadJobs = async () => {
     setJobs([]);
   };
@@ -1273,32 +1295,80 @@ const RecruiterView = () => {
         </div>
 
         {/* --- MODAL FOR PROFILE DETAILS --- */}
-        {selectedProfessional && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-8">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-[#002B5C]">{selectedProfessional.user?.name}'s Profile</h2>
-                <button onClick={() => setSelectedProfessional(null)} className="text-gray-400 text-3xl">&times;</button>
-              </div>
+        {/* --- MODAL FOR PROFILE DETAILS --- */}
+{selectedProfessional && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-8">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-[#002B5C]">
+          {selectedProfessional.user?.name || selectedProfessional.name}'s Profile
+        </h2>
+        <button onClick={() => setSelectedProfessional(null)} className="text-gray-400 text-3xl hover:text-gray-600">&times;</button>
+      </div>
 
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Vetting Breakdown</h4>
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 font-mono text-xs text-gray-600 overflow-x-auto">
-                    {selectedProfessional.scoreBreakdown || "No breakdown available."}
-                  </div>
-                </div>
+      <div className="space-y-6">
+        {/* Bio Section */}
+        <div>
+          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Professional Bio</h4>
+          <p className="text-gray-700 leading-relaxed bg-blue-50 p-4 rounded-lg border border-blue-100 italic">
+            "{selectedProfessional.claimText || "No professional bio provided."}"
+          </p>
+        </div>
 
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">AI Feedback</h4>
-                  <p className="text-gray-700 leading-relaxed bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    {selectedProfessional.aiFeedback || "No feedback generated."}
-                  </p>
-                </div>
-              </div>
+        {/* Experience & Skills Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Experience</h4>
+            <p className="text-gray-900 font-semibold bg-gray-50 p-3 rounded-lg border border-gray-100">
+              {selectedProfessional.experience || "Not specified"}
+            </p>
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Technical Skills</h4>
+            <div className="flex flex-wrap gap-2 p-1">
+              {selectedProfessional.skillsArray ? 
+                selectedProfessional.skillsArray.split(',').map((skill, i) => (
+                  <span key={i} className="px-3 py-1 bg-[#002B5C] text-white text-[10px] font-bold rounded-full">
+                    {skill.trim()}
+                  </span>
+                )) : <span className="text-gray-400 text-sm">No skills listed</span>
+              }
             </div>
           </div>
-        )}
+        </div>
+
+        {/* --- NEW: VETTING HISTORY --- */}
+        <div className="pt-6 border-t border-gray-100">
+          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Vetting History</h4>
+          <div className="space-y-3">
+            {/* Current Score Row */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">✅</div>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">Latest AI Evaluation</p>
+                  <p className="text-[10px] text-gray-500">Completed on {new Date().toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xl font-black text-[#002B5C]">
+                  {parseFloat(selectedProfessional.currentTrustScore || 0).toFixed(1)}
+                </span>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Trust Score</p>
+              </div>
+            </div>
+
+            {/* Placeholder for Historical Data */}
+            <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-dashed border-gray-200 opacity-50">
+              <p className="text-xs italic text-gray-400">Previous vetting data not available</p>
+              <span className="text-xs font-bold text-gray-300">--/--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );

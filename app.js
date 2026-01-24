@@ -153,7 +153,6 @@ const ClaimsService = {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
-          // Added Authorization if your backend requires it
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: data ? JSON.stringify(data) : undefined,
@@ -169,9 +168,9 @@ const ClaimsService = {
     }
   },
 
-  // FIX: Using 'this' avoids the initialization error
-  // FIX: Sending 'claim' directly instead of nesting it in another object
+  // Use standard methods (not arrows) to access 'this' correctly
   submitClaim(claim) {
+    // Sending 'claim' directly matches the {claim} = req.body on your backend
     return this.request('/claim', claim); 
   },
 

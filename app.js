@@ -1072,11 +1072,18 @@ const RecruiterView = () => {
   const [jobs, setJobs] = React.useState([]);
   const [successMsg, setSuccessMsg] = React.useState('');
 
+  // 1. UPDATED: Fetching from our new Vetted Professionals endpoint
   const loadProfessionals = async () => {
     setLoading(true);
     try {
-      // Load from backend - for now using placeholder
-      const result = await ProfileService.fetchAll('all');
+      const response = await fetch(`${BACKEND_URL}/api/trust-score/vetted-pros`, {
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const result = await response.json();
+      
       if (result.success && Array.isArray(result.data)) {
         setProfessionals(result.data);
         setFilteredProfessionals(result.data);
@@ -1091,21 +1098,21 @@ const RecruiterView = () => {
   };
 
   const loadJobs = async () => {
-    // Load job postings - placeholder for now
     setJobs([]);
   };
 
+  // 2. UPDATED: Filter logic to look at the populated User Name
   const filterProfessionals = () => {
     let filtered = [...professionals];
     if (searchQuery) {
       filtered = filtered.filter(p => 
-        (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (p.skillsArray && p.skillsArray.toLowerCase().includes(searchQuery.toLowerCase()))
+        (p.user?.name && p.user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (p.flags && p.flags.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
     if (minTrustScore > 0) {
       filtered = filtered.filter(p => {
-        const score = parseFloat(p.currentTrustScore) || 0;
+        const score = parseFloat(p.score) || 0;
         return score >= minTrustScore;
       });
     }
@@ -1160,7 +1167,6 @@ const RecruiterView = () => {
 
         {/* Tab Content */}
         <div className="bg-white rounded-b-xl shadow-lg p-6 lg:p-8">
-          {/* Search Tab */}
           {activeTab === 'search' && (
             <div>
               <div className="mb-6 p-6 bg-gray-50 rounded-lg">
@@ -1172,7 +1178,7 @@ const RecruiterView = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className={inputClasses}
-                      placeholder="Name, skills, or keywords..."
+                      placeholder="Search by name..."
                     />
                   </div>
                   <div>
@@ -1180,12 +1186,12 @@ const RecruiterView = () => {
                     <input
                       type="number"
                       min="0"
-                      max="10"
-                      step="0.5"
+                      max="100"
+                      step="5"
                       value={minTrustScore}
                       onChange={(e) => setMinTrustScore(parseFloat(e.target.value) || 0)}
                       className={inputClasses}
-                      placeholder="0.0"
+                      placeholder="0"
                     />
                   </div>
                   <div className="flex items-end">
@@ -1201,47 +1207,33 @@ const RecruiterView = () => {
                 {loading ? (
                   <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B5C]"></div>
-                    <p className="mt-4 text-gray-600">Loading professionals...</p>
                   </div>
                 ) : filteredProfessionals.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredProfessionals.map((professional, index) => (
-                      <div key={professional._id || index} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                    {filteredProfessionals.map((p, index) => (
+                      <div key={p._id || index} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">{professional.name || 'Professional'}</h3>
-                            <p className="text-sm text-gray-500">{professional.email || 'N/A'}</p>
+                            {/* 3. FIXED: Accessing the populated user name */}
+                            <h3 className="text-lg font-bold text-gray-900">{p.user?.name || 'Professional'}</h3>
+                            <p className="text-sm text-gray-500">{p.user?.email || 'N/A'}</p>
                           </div>
                           <div className="text-right">
-                            <div className="text-2xl font-bold text-[#002B5C]">
-                              {parseFloat(professional.currentTrustScore || 0).toFixed(1)}
-                            </div>
+                            <div className="text-2xl font-bold text-[#002B5C]">{p.score}</div>
                             <div className="text-xs text-gray-500">Trust Score</div>
                           </div>
                         </div>
-                        <div className="space-y-2">
-                          <div>
-                            <span className="text-xs font-semibold text-gray-600">Skills:</span>
-                            <p className="text-sm text-gray-700">{professional.skillsArray || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs font-semibold text-gray-600">Experience:</span>
-                            <p className="text-sm text-gray-700">{professional.experience || 'Not specified'}</p>
-                          </div>
-                        </div>
                         <button 
-                          onClick={() => setSelectedProfessional(professional)}
+                          onClick={() => setSelectedProfessional(p)}
                           className="mt-4 w-full py-2 text-sm font-semibold text-[#002B5C] border border-[#002B5C] rounded-lg hover:bg-[#002B5C] hover:text-white transition-colors"
                         >
-                          View Profile
+                          View Full Profile
                         </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">No professionals found matching your criteria</p>
-                  </div>
+                  <p className="text-center py-12 text-gray-500">No professionals found matching your criteria</p>
                 )}
               </div>
             </div>
@@ -1254,71 +1246,10 @@ const RecruiterView = () => {
               <div className="mb-8 p-6 bg-gray-50 rounded-lg">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Job Posting</h3>
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Job Title *</label>
-                    <input
-                      type="text"
-                      value={jobForm.title}
-                      onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
-                      className={inputClasses}
-                      placeholder="Senior Full Stack Developer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
-                    <textarea
-                      value={jobForm.description}
-                      onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })}
-                      className={inputClasses + " min-h-[120px]"}
-                      placeholder="Job description and requirements..."
-                      rows="5"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Required Skills *</label>
-                    <input
-                      type="text"
-                      value={jobForm.requiredSkills}
-                      onChange={(e) => setJobForm({ ...jobForm, requiredSkills: e.target.value })}
-                      className={inputClasses}
-                      placeholder="React, Node.js, AWS, Docker"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSuccessMsg('Job posting feature coming soon!');
-                      setTimeout(() => setSuccessMsg(''), 3000);
-                    }}
-                    className={btnClasses + " w-full"}
-                  >
-                    Post Job
-                  </button>
+                  <input type="text" className={inputClasses} placeholder="Job Title" />
+                  <textarea className={inputClasses + " min-h-[100px]"} placeholder="Description"></textarea>
+                  <button onClick={() => { setSuccessMsg('Feature coming soon!'); setTimeout(() => setSuccessMsg(''), 3000); }} className={btnClasses + " w-full"}>Post Job</button>
                 </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Active Job Postings</h3>
-                {jobs.length > 0 ? (
-                  <div className="space-y-4">
-                    {jobs.map((job, index) => (
-                      <div key={job._id || index} className="p-6 bg-white border border-gray-200 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="text-lg font-bold text-gray-900">{job.title}</h4>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            job.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {job.status}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 mb-2">{job.description}</p>
-                        <p className="text-sm text-gray-500">
-                          <span className="font-semibold">Skills:</span> {job.requiredSkills}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-center py-8">No job postings yet</p>
-                )}
               </div>
             </div>
           )}
@@ -1338,10 +1269,7 @@ const RecruiterView = () => {
                 </div>
                 <div className="p-6 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="text-3xl font-bold text-purple-700 mb-2">
-                    {professionals.length > 0 
-                      ? (professionals.reduce((sum, p) => sum + (parseFloat(p.currentTrustScore) || 0), 0) / professionals.length).toFixed(1)
-                      : '0.0'
-                    }
+                    {professionals.length > 0 ? (professionals.reduce((sum, p) => sum + p.score, 0) / professionals.length).toFixed(1) : '0.0'}
                   </div>
                   <div className="text-sm text-gray-600">Avg Trust Score</div>
                 </div>
@@ -1349,6 +1277,34 @@ const RecruiterView = () => {
             </div>
           )}
         </div>
+
+        {/* --- MODAL FOR PROFILE DETAILS --- */}
+        {selectedProfessional && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-[#002B5C]">{selectedProfessional.user?.name}'s Profile</h2>
+                <button onClick={() => setSelectedProfessional(null)} className="text-gray-400 text-3xl">&times;</button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Vetting Breakdown</h4>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 font-mono text-xs text-gray-600 overflow-x-auto">
+                    {selectedProfessional.scoreBreakdown || "No breakdown available."}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">AI Feedback</h4>
+                  <p className="text-gray-700 leading-relaxed bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    {selectedProfessional.aiFeedback || "No feedback generated."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

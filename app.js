@@ -151,27 +151,37 @@ const ClaimsService = {
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/api/claims${endpoint}`, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          // Added Authorization if your backend requires it
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: data ? JSON.stringify(data) : undefined,
       });
+
       const result = await response.json();
-      if (!response.ok) {
-        const errorMsg = result.error || result.message || 'Server error';
-        throw new Error(errorMsg);
-      }
-      // Handle both array and object responses
-      const claimsData = Array.isArray(result.message) ? result.message : (result.data || result);
-      return { success: true, data: claimsData };
+      if (!response.ok) throw new Error(result.error || result.message || 'Server error');
+
+      return { success: true, data: result.data || result.message || result };
     } catch (error) {
       console.error(`Claims API Error (${endpoint}):`, error);
       return { success: false, message: error.message };
     }
   },
 
-  submitClaim: (claim) => ClaimsService.request('/claim', { claim }),
-  deleteClaim: (claimId) => ClaimsService.request(`/remove/${claimId}`, null, 'DELETE'),
-  fetchAllClaims: () => ClaimsService.request('/fetch', null, 'GET')
+  // FIX: Using 'this' avoids the initialization error
+  // FIX: Sending 'claim' directly instead of nesting it in another object
+  submitClaim(claim) {
+    return this.request('/claim', claim); 
+  },
+
+  deleteClaim(claimId) {
+    return this.request(`/remove/${claimId}`, null, 'DELETE');
+  },
+
+  fetchAllClaims() {
+    return this.request('/fetch', null, 'GET');
+  }
 };
 
 // ====================================================================
@@ -1077,7 +1087,6 @@ const RecruiterView = () => {
       const result = await ProfileService.fetchAll('all');
       if (result.success && Array.isArray(result.data)) {
 
-        // Bro, this logic filters out the duplicates by User ID
         const uniqueMap = new Map();
         result.data.forEach(item => {
           // Use the user's ID as the key. If it repeats, it overwrites the old one.

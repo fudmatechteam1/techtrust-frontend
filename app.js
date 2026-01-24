@@ -1103,22 +1103,25 @@ const RecruiterView = () => {
 
   // 2. UPDATED: Filter logic to look at the populated User Name
   const filterProfessionals = () => {
-    let filtered = [...professionals];
-    if (searchQuery) {
-      filtered = filtered.filter(p =>
-        (p.user?.name && p.user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (p.flags && p.flags.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-    if (minTrustScore > 0) {
-      filtered = filtered.filter(p => {
-        const score = parseFloat(p.score) || 0;
-        return score >= minTrustScore;
-      });
-    }
-    setFilteredProfessionals(filtered);
-  };
+  const filtered = professionals.filter(p => {
+    // 1. Get the searchable text (Name, Email, or Skills)
+    const fullName = (p.user?.name || p.name || "").toLowerCase();
+    const email = (p.user?.email || "").toLowerCase();
+    const skills = (p.skillsArray || "").toLowerCase();
+    const query = searchQuery.toLowerCase();
 
+    // 2. Check if it matches the search query
+    const matchesSearch = fullName.includes(query) || email.includes(query) || skills.includes(query);
+
+    // 3. Check the trust score
+    const score = parseFloat(p.currentTrustScore) || 0;
+    const matchesScore = score >= minTrustScore;
+
+    return matchesSearch && matchesScore;
+  });
+
+  setFilteredProfessionals(filtered);
+};
   React.useEffect(() => {
     loadProfessionals();
     loadJobs();

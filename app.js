@@ -34,7 +34,7 @@ const useTheme = () => React.useContext(ThemeContext);
 // --- SERVICE LAYER (Huawei Cloud Backend) ---
 // ====================================================================
 // Backend URL - Can be set via environment variable or use default
-const BACKEND_BASE_URL = window.BACKEND_URL || 'https://techtrust-backend.onrender.com';
+const BACKEND_BASE_URL = window.BACKEND_URL || 'https://fudmatechteam1.github.io/techtrust-frontend/';
 const API_BASE_URL = `${BACKEND_BASE_URL}/api/auth`;
 const TRUST_SCORE_API_URL = `${BACKEND_BASE_URL}/api/trust-score`;
 
@@ -84,66 +84,46 @@ const AuthService = {
 };
 
 // Trust Score Service - Connects to Python AI service via Node.js backend
-// ==========================================
-// TRUST SCORE SERVICE
-// ==========================================
-
-// Define the API Base URL
-
 const TrustScoreService = {
   async request(endpoint, data, method = 'POST') {
     try {
       const response = await fetch(`${TRUST_SCORE_API_URL}${endpoint}`, {
         method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          // CRITICAL ADDITION: The backend requires this token to know who you are
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        credentials: 'include', // Kept as requested
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: data ? JSON.stringify(data) : undefined,
       });
-
       const result = await response.json();
-
       if (!response.ok) {
         const errorMsg = result.error || result.message || 'Server error';
         throw new Error(errorMsg);
       }
-
       return { success: true, data: result.data || result };
-
     } catch (error) {
       console.error(`Trust Score API Error (${endpoint}):`, error);
       return { success: false, message: error.message };
     }
   },
 
-  // 1. Predict Score (Used by Verification Button)
   predictTrustScore: (profileData) => TrustScoreService.request('/predict', profileData),
 
-  // 2. Batch Predict (Optional)
   predictBatch: (developers) => TrustScoreService.request('/predict/batch', { developers }),
 
-  // 3. Get Credentials (UPDATED: Points to the correct backend route we created)
-  getCredentials: () => TrustScoreService.request('/credentials/supported', null, 'GET'),
+  getCredentials: () => TrustScoreService.request('/credentials', null, 'GET'),
 
-  // 4. Health Checks
   getHealth: () => TrustScoreService.request('/health', null, 'GET'),
 
   getMetrics: () => TrustScoreService.request('/metrics', null, 'GET')
 };
+
 // Profile Service - Manages user profiles
 const ProfileService = {
   async request(endpoint, data, method = 'POST') {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/api/claims${endpoint}`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/profile${endpoint}`, {
         method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        credentials: 'include', // Add this line for cookie authentication
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: data ? JSON.stringify(data) : undefined,
       });
       const result = await response.json();
@@ -171,7 +151,7 @@ const ClaimsService = {
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/api/claims${endpoint}`, {
         method: method,
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
@@ -191,7 +171,7 @@ const ClaimsService = {
   // Use standard methods (not arrows) to access 'this' correctly
   submitClaim(claim) {
     // Sending 'claim' directly matches the {claim} = req.body on your backend
-    return this.request('/claim', claim);
+    return this.request('/claim', claim); 
   },
 
   deleteClaim(claimId) {
@@ -760,8 +740,8 @@ const ProfileView = () => {
   const btnClasses = "px-6 py-3 rounded-lg font-semibold text-white shadow-md bg-[#002B5C] hover:bg-[#001f42] hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
 
   const tabClasses = (isActive) => `px-6 py-3 font-semibold transition-all duration-200 border-b-2 ${isActive
-    ? 'border-[#002B5C] text-[#002B5C]'
-    : 'border-transparent text-gray-500 hover:text-[#002B5C] hover:border-gray-300'
+      ? 'border-[#002B5C] text-[#002B5C]'
+      : 'border-transparent text-gray-500 hover:text-[#002B5C] hover:border-gray-300'
     }`;
 
   return (
@@ -959,8 +939,8 @@ const ProfileView = () => {
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-semibold text-gray-700">Confidence Level</span>
                           <span className={`text-sm font-bold px-3 py-1 rounded-full ${trustScoreData.confidence_level === 'High' ? 'bg-green-100 text-green-700' :
-                            trustScoreData.confidence_level === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
+                              trustScoreData.confidence_level === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
                             }`}>
                             {trustScoreData.confidence_level || 'N/A'}
                           </span>
@@ -1087,129 +1067,83 @@ const ProfileView = () => {
           {/* Credentials Tab */}
           {activeTab === 'credentials' && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100 animate-fade-in">
-
-                {/* HEADER */}
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="p-3 bg-purple-100 text-purple-600 rounded-lg text-2xl">🏆</div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Professional Credentials</h2>
-                    <p className="text-gray-500">Add certifications to boost your Trust Score via AI verification.</p>
-                  </div>
-                </div>
-
-                {/* 1. SELECTION AREA */}
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Select Certification</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedCred}
-                      onChange={(e) => setSelectedCred(e.target.value)}
-                      className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 bg-gray-50"
-                    >
-                      <option value="">-- Choose a credential --</option>
-                      {supportedCredentials.map((cred, idx) => (
-                        <option key={idx} value={cred.name}>
-                          {cred.name} ({cred.vendor}) - Weight: {cred.weight}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      // Find the full object based on the name selected
-                      const credObj = supportedCredentials.find(c => c.name === selectedCred);
-
-                      // Add if found and not already in the list
-                      if (credObj && !userCredentials.some(c => c.name === credObj.name)) {
-                        setUserCredentials([...userCredentials, credObj]);
-                        setSelectedCred(''); // Reset dropdown
-                      }
-                    }}
-                    disabled={!selectedCred}
-                    className="mt-3 w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                    type="button"
-                  >
-                    + Add Credential
-                  </button>
-                </div>
-
-                {/* 2. LIST OF ADDED CREDENTIALS */}
-                <div className="mb-8">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Credentials to Verify</h3>
-                  {userCredentials.length > 0 ? (
-                    <ul className="space-y-3">
-                      {userCredentials.map((cred, idx) => (
-                        <li key={idx} className="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-lg p-3">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xl">📜</span>
-                            <div>
-                              <span className="font-bold text-gray-900 block">{cred.name}</span>
-                              <span className="text-xs text-purple-600 font-bold">{cred.vendor} • {cred.category}</span>
-                            </div>
-                          </div>
-                          <button
-                            className="text-gray-400 hover:text-red-600 font-bold px-2 text-lg"
-                            onClick={() => setUserCredentials(userCredentials.filter((_, i) => i !== idx))}
-                            type="button"
-                          >
-                            &times;
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                      <p className="text-gray-400">No credentials added yet.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. VERIFY BUTTON */}
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Credentials</h2>
+              <p className="text-gray-600 mb-6">Add and manage your professional certifications and credentials</p>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Credential</label>
+                <select
+                  value={selectedCred}
+                  onChange={e => setSelectedCred(e.target.value)}
+                  className={inputClasses}
+                >
+                  <option value="">-- Choose a credential --</option>
+                  {supportedCredentials.map((cred, idx) => (
+                    <option key={cred.name + cred.vendor + idx} value={JSON.stringify(cred)}>
+                      {cred.name} ({cred.vendor})
+                    </option>
+                  ))}
+                </select>
                 <button
-                  className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${userCredentials.length === 0 || loading
-                      ? 'bg-gray-300 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 hover:scale-[1.02]'
-                    }`}
-                  disabled={userCredentials.length === 0 || loading}
-                  onClick={async () => {
-                    setLoading(true);
-                    setError('');
-                    setSuccessMsg('');
-                    try {
-                      // CRITICAL FIX: Ensure payload matches Backend Controller exactly
-                      const payload = {
-                        username: user.githubUsername, // Use the user object directly
-                        credentials: userCredentials
-                      };
-
-                      const result = await TrustScoreService.predictTrustScore(payload);
-
-                      if (result.success) {
-                        setTrustScoreData(result.data);
-                        setSuccessMsg(`Success! Trust Score updated to ${result.data.trust_score}`);
-                        setTimeout(() => setSuccessMsg(''), 4000);
-                      } else {
-                        setError(result.message || 'Failed to verify credentials');
-                      }
-                    } catch (err) {
-                      setError('Connection error. Please check your network.');
-                    } finally {
-                      setLoading(false);
+                  className={btnClasses + " mt-4 w-full"}
+                  disabled={!selectedCred}
+                  onClick={() => {
+                    const credObj = selectedCred ? JSON.parse(selectedCred) : null;
+                    if (credObj && !userCredentials.some(c => c.name === credObj.name && c.vendor === credObj.vendor)) {
+                      setUserCredentials([...userCredentials, credObj]);
                     }
                   }}
                   type="button"
                 >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Verifying with AI...
-                    </span>
-                  ) : 'Verify & Update Trust Score'}
+                  Add Credential
                 </button>
-
               </div>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Your Credentials</h3>
+                {userCredentials.length > 0 ? (
+                  <ul className="space-y-2">
+                    {userCredentials.map((cred, idx) => (
+                      <li key={cred.name + cred.vendor + idx} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                        <span className="font-medium text-blue-900">{cred.name} <span className="text-xs text-blue-700">({cred.vendor})</span></span>
+                        <button
+                          className="ml-2 text-red-600 hover:text-red-800 text-xs font-bold"
+                          onClick={() => setUserCredentials(userCredentials.filter((_, i) => i !== idx))}
+                          type="button"
+                        >Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500">No credentials added yet.</p>
+                )}
+              </div>
+              <button
+                className={btnClasses + " w-full"}
+                disabled={userCredentials.length === 0 || loading}
+                onClick={async () => {
+                  setLoading(true);
+                  setError('');
+                  setSuccessMsg('');
+                  try {
+                    // Use the trust score form, but add credentials
+                    const payload = { ...profileForm, credentials: userCredentials };
+                    const result = await TrustScoreService.predictTrustScore(payload);
+                    if (result.success) {
+                      setTrustScoreData(result.data);
+                      setSuccessMsg('Credentials verified and trust score updated!');
+                      setTimeout(() => setSuccessMsg(''), 3000);
+                    } else {
+                      setError(result.message || 'Failed to verify credentials');
+                    }
+                  } catch (err) {
+                    setError('Connection error. Please check your network.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                type="button"
+              >
+                {loading ? 'Verifying...' : 'Verify & Update Trust Score'}
+              </button>
             </div>
           )}
         </div>
@@ -1267,25 +1201,25 @@ const RecruiterView = () => {
 
   // 2. UPDATED: Filter logic to look at the populated User Name
   const filterProfessionals = () => {
-    const filtered = professionals.filter(p => {
-      // 1. Get the searchable text (Name, Email, or Skills)
-      const fullName = (p.user?.name || p.name || "").toLowerCase();
-      const email = (p.user?.email || "").toLowerCase();
-      const skills = (p.skillsArray || "").toLowerCase();
-      const query = searchQuery.toLowerCase();
+  const filtered = professionals.filter(p => {
+    // 1. Get the searchable text (Name, Email, or Skills)
+    const fullName = (p.user?.name || p.name || "").toLowerCase();
+    const email = (p.user?.email || "").toLowerCase();
+    const skills = (p.skillsArray || "").toLowerCase();
+    const query = searchQuery.toLowerCase();
 
-      // 2. Check if it matches the search query
-      const matchesSearch = fullName.includes(query) || email.includes(query) || skills.includes(query);
+    // 2. Check if it matches the search query
+    const matchesSearch = fullName.includes(query) || email.includes(query) || skills.includes(query);
 
-      // 3. Check the trust score
-      const score = parseFloat(p.currentTrustScore) || 0;
-      const matchesScore = score >= minTrustScore;
+    // 3. Check the trust score
+    const score = parseFloat(p.currentTrustScore) || 0;
+    const matchesScore = score >= minTrustScore;
 
-      return matchesSearch && matchesScore;
-    });
+    return matchesSearch && matchesScore;
+  });
 
-    setFilteredProfessionals(filtered);
-  };
+  setFilteredProfessionals(filtered);
+};
   React.useEffect(() => {
     loadProfessionals();
     loadJobs();
@@ -1296,8 +1230,8 @@ const RecruiterView = () => {
   }, [searchQuery, minTrustScore, professionals]);
 
   const tabClasses = (isActive) => `px-6 py-3 font-semibold transition-all duration-200 border-b-2 ${isActive
-    ? 'border-[#002B5C] text-[#002B5C]'
-    : 'border-transparent text-gray-500 hover:text-[#002B5C] hover:border-gray-300'
+      ? 'border-[#002B5C] text-[#002B5C]'
+      : 'border-transparent text-gray-500 hover:text-[#002B5C] hover:border-gray-300'
     }`;
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] transition-all outline-none hover:border-gray-400";
   const btnClasses = "px-6 py-3 rounded-lg font-semibold text-white shadow-md bg-[#002B5C] hover:bg-[#001f42] hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";

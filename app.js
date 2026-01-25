@@ -86,39 +86,30 @@ const AuthService = {
 // Trust Score Service - Connects to Python AI service via Node.js backend
 const TrustScoreService = {
   async request(endpoint, data, method = 'POST') {
-    // 2. Clean endpoint to prevent double slashes
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${TRUST_SCORE_API_URL}${cleanEndpoint}`;
-
+    const url = `${TRUST_SCORE_API_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    
     try {
-      // 3. Get token from localStorage
       const token = localStorage.getItem('token');
-
+      
       const response = await fetch(url, {
         method: method,
         headers: { 
             'Content-Type': 'application/json',
-            // CRITICAL: Ensure this matches your backend middleware expectation
+            // Send as "Bearer [token]"
             'Authorization': `Bearer ${token}` 
         },
         body: data ? JSON.stringify(data) : undefined,
       });
 
       const result = await response.json();
-      
-      if (!response.ok) {
-        // Log the specific error from backend to console for debugging
-        console.error("Backend Rejected Request:", result);
-        throw new Error(result.message || 'Server error');
-      }
-      
+      if (!response.ok) throw new Error(result.message || 'Server error');
       return { success: true, data: result.data || result };
     } catch (error) {
       console.error(`API Error (${url}):`, error);
       return { success: false, message: error.message };
     }
   },
-
+  
   predictTrustScore: (data) => TrustScoreService.request('/predict', data, 'POST'),
 
   predictBatch: (developers) => TrustScoreService.request('/predict/batch', { developers }),

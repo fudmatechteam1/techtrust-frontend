@@ -34,7 +34,7 @@ const useTheme = () => React.useContext(ThemeContext);
 // --- SERVICE LAYER (Huawei Cloud Backend) ---
 // ====================================================================
 // Backend URL - Can be set via environment variable or use default
-const BACKEND_BASE_URL = window.BACKEND_URL || 'https://fudmatechteam1.github.io/techtrust-frontend/';
+const BACKEND_BASE_URL = window.BACKEND_URL || 'https://techtrust-backend.onrender.com';
 const API_BASE_URL = `${BACKEND_BASE_URL}/api/auth`;
 const TRUST_SCORE_API_URL = `${BACKEND_BASE_URL}/api/trust-score`;
 
@@ -86,30 +86,36 @@ const AuthService = {
 // Trust Score Service - Connects to Python AI service via Node.js backend
 const TrustScoreService = {
   async request(endpoint, data, method = 'POST') {
+    // Force endpoint to start with / and remove any double slashes
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${TRUST_SCORE_API_URL}${cleanEndpoint}`;
+
     try {
-      const response = await fetch(`${TRUST_SCORE_API_URL}${endpoint}`, {
+      const response = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}` 
+        },
         body: data ? JSON.stringify(data) : undefined,
       });
+
       const result = await response.json();
-      if (!response.ok) {
-        const errorMsg = result.error || result.message || 'Server error';
-        throw new Error(errorMsg);
-      }
+      if (!response.ok) throw new Error(result.message || 'Server error');
+      
+      // Handle the different data structures between your two versions
       return { success: true, data: result.data || result };
     } catch (error) {
-      console.error(`Trust Score API Error (${endpoint}):`, error);
+      console.error(`API Error (${url}):`, error);
       return { success: false, message: error.message };
     }
   },
-
+  
   predictTrustScore: (profileData) => TrustScoreService.request('/predict', profileData),
 
   predictBatch: (developers) => TrustScoreService.request('/predict/batch', { developers }),
 
-  getCredentials: () => TrustScoreService.request('/credentials', null, 'GET'),
+  getCredentials: () => TrustScoreService.request('/credentials/supported', null, 'GET'),
 
   getHealth: () => TrustScoreService.request('/health', null, 'GET'),
 

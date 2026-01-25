@@ -139,7 +139,7 @@ const ProfileService = {
   },
 
   addExperience: (data) => ProfileService.request('/expr', data),
-  fetchAll: (userId) => ProfileService.request(`/fetch1/${userId}`, null, 'GET'),
+  fetchAll: () => ProfileService.request('/fetch1/all', null, 'GET'),
   fetchUserById: (userId) => ProfileService.request(`/fetch-user/${userId}`, null, 'GET'),
   fetchById: (profileId) => ProfileService.request(`/fetch-profile/${profileId}`, null, 'GET'),
   updateProfile: (data) => ProfileService.request('/Edit-profile', data, 'PUT')
@@ -613,6 +613,13 @@ const ProfileView = () => {
   const [supportedCredentials, setSupportedCredentials] = React.useState([]);
   const [userCredentials, setUserCredentials] = React.useState([]);
   const [selectedCred, setSelectedCred] = React.useState('');
+  const [showProfileModal, setShowProfileModal] = React.useState(false);
+  const [profileData, setProfileData] = React.useState({
+    skillsArray: '',
+    experience: '',
+    claimText: ''
+  });
+  const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
     // Fetch supported credentials from backend
@@ -733,6 +740,40 @@ const ProfileView = () => {
       setError('Connection error. Please check your network.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenProfile = async () => {
+    setShowProfileModal(true);
+    try {
+      const res = await ProfileService.request('/my-profile', null, 'GET');
+      if (res.success && res.data) {
+        setProfileData({
+          skillsArray: res.data.skillsArray || '',
+          experience: res.data.experience || '',
+          claimText: res.data.claimText || ''
+        });
+      }
+    } catch (err) {
+      setProfileData({ skillsArray: '', experience: '', claimText: '' });
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await ProfileService.request('/expr', profileData);
+      if (res.success) {
+        setShowProfileModal(false);
+        alert('Profile updated successfully!');
+      } else {
+        alert(res.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      alert('Connection error. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1010,6 +1051,67 @@ const ProfileView = () => {
                   {loading ? 'Saving...' : 'Save Profile'}
                 </button>
               </div>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                onClick={handleOpenProfile}
+                type="button"
+              >
+                Edit Profile
+              </button>
+              {/* Profile Modal */}
+              {showProfileModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                  <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg relative">
+                    <button
+                      className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-2xl font-bold"
+                      onClick={() => setShowProfileModal(false)}
+                      type="button"
+                    >
+                      &times;
+                    </button>
+                    <h2 className="text-2xl font-bold mb-6 text-gray-900">Edit Profile</h2>
+                    <form onSubmit={handleSaveProfile} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Skills (comma-separated)</label>
+                        <input
+                          type="text"
+                          value={profileData.skillsArray}
+                          onChange={e => setProfileData({ ...profileData, skillsArray: e.target.value })}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] outline-none"
+                          placeholder="React, Node.js, Python, AWS"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Experience</label>
+                        <textarea
+                          value={profileData.experience}
+                          onChange={e => setProfileData({ ...profileData, experience: e.target.value })}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] outline-none min-h-[100px]"
+                          placeholder="Describe your professional experience..."
+                          rows="4"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Professional Claim</label>
+                        <textarea
+                          value={profileData.claimText}
+                          onChange={e => setProfileData({ ...profileData, claimText: e.target.value })}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] outline-none min-h-[80px]"
+                          placeholder="What makes you stand out? Your key achievements..."
+                          rows="3"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isSaving}
+                      >
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1173,7 +1275,7 @@ const RecruiterView = () => {
   const loadProfessionals = async () => {
     setLoading(true);
     try {
-      const result = await ProfileService.fetchAll('all');
+      const result = await ProfileService.fetchAll();
       if (result.success && Array.isArray(result.data)) {
 
         const uniqueMap = new Map();

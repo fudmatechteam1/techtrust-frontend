@@ -364,7 +364,7 @@ const AuthView = ({ setView }) => {
 
 
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#E60012] transition-all outline-none hover:border-gray-400";
-  const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
+  const btnClasses = "w-full py-3 rounded-lg font-bold text-white shadow-lg bg-[#002B5C] hover:bg-[#001f42] hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
 
   // Using the image from your uploaded file
   const bgImage = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1";
@@ -610,6 +610,25 @@ const ProfileView = () => {
     currentTrustScore: ''
   });
   const [claimForm, setClaimForm] = React.useState({ claim: '' });
+  const [supportedCredentials, setSupportedCredentials] = React.useState([]);
+  const [userCredentials, setUserCredentials] = React.useState([]);
+  const [selectedCred, setSelectedCred] = React.useState('');
+
+  React.useEffect(() => {
+    // Fetch supported credentials from backend
+    fetch('/api/trust-score/credentials/supported', {
+      credentials: 'include'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setSupportedCredentials(data);
+        else if (Array.isArray(data.credentials_by_category)) {
+          // fallback for grouped format
+          setSupportedCredentials(Object.values(data.credentials_by_category).flat());
+        }
+      })
+      .catch(() => setSupportedCredentials([]));
+  }, []);
 
   const loadClaims = async () => {
     try {
@@ -1047,13 +1066,84 @@ const ProfileView = () => {
 
           {/* Credentials Tab */}
           {activeTab === 'credentials' && (
-            <div>
+            <div className="max-w-xl mx-auto">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Credentials</h2>
               <p className="text-gray-600 mb-6">Add and manage your professional certifications and credentials</p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-                <p className="text-blue-700">Credential management coming soon...</p>
-                <p className="text-sm text-blue-600 mt-2">You can add credentials when calculating your trust score</p>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Credential</label>
+                <select
+                  value={selectedCred}
+                  onChange={e => setSelectedCred(e.target.value)}
+                  className={inputClasses}
+                >
+                  <option value="">-- Choose a credential --</option>
+                  {supportedCredentials.map((cred, idx) => (
+                    <option key={cred.name + cred.vendor + idx} value={JSON.stringify(cred)}>
+                      {cred.name} ({cred.vendor})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className={btnClasses + " mt-4 w-full"}
+                  disabled={!selectedCred}
+                  onClick={() => {
+                    const credObj = selectedCred ? JSON.parse(selectedCred) : null;
+                    if (credObj && !userCredentials.some(c => c.name === credObj.name && c.vendor === credObj.vendor)) {
+                      setUserCredentials([...userCredentials, credObj]);
+                    }
+                  }}
+                  type="button"
+                >
+                  Add Credential
+                </button>
               </div>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Your Credentials</h3>
+                {userCredentials.length > 0 ? (
+                  <ul className="space-y-2">
+                    {userCredentials.map((cred, idx) => (
+                      <li key={cred.name + cred.vendor + idx} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                        <span className="font-medium text-blue-900">{cred.name} <span className="text-xs text-blue-700">({cred.vendor})</span></span>
+                        <button
+                          className="ml-2 text-red-600 hover:text-red-800 text-xs font-bold"
+                          onClick={() => setUserCredentials(userCredentials.filter((_, i) => i !== idx))}
+                          type="button"
+                        >Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500">No credentials added yet.</p>
+                )}
+              </div>
+              <button
+                className={btnClasses + " w-full"}
+                disabled={userCredentials.length === 0 || loading}
+                onClick={async () => {
+                  setLoading(true);
+                  setError('');
+                  setSuccessMsg('');
+                  try {
+                    // Use the trust score form, but add credentials
+                    const payload = { ...profileForm, credentials: userCredentials };
+                    const result = await TrustScoreService.predictTrustScore(payload);
+                    if (result.success) {
+                      setTrustScoreData(result.data);
+                      setSuccessMsg('Credentials verified and trust score updated!');
+                      setTimeout(() => setSuccessMsg(''), 3000);
+                    } else {
+                      setError(result.message || 'Failed to verify credentials');
+                    }
+                  } catch (err) {
+                    setError('Connection error. Please check your network.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                type="button"
+              >
+                {loading ? 'Verifying...' : 'Verify & Update Trust Score'}
+              </button>
             </div>
           )}
         </div>

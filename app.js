@@ -149,27 +149,44 @@ const ProfileService = {
 const ClaimsService = {
     async request(endpoint, data, method = 'POST') {
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cd1230fe-8443-44b4-aab0-d1ea296bed31',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app.js:ClaimsService.request:entry',message:'ClaimsService.request called',data:{endpoint,method,hasBody:!!data,bodyKeys:data?Object.keys(data):[]},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion agent log
             const response = await fetch(`${BACKEND_BASE_URL}/api/claims${endpoint}`, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: data ? JSON.stringify(data) : undefined,
             });
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cd1230fe-8443-44b4-aab0-d1ea296bed31',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'app.js:ClaimsService.request:response',message:'ClaimsService.request got response',data:{endpoint,method,status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion agent log
             const result = await response.json();
             if (!response.ok) {
                 const errorMsg = result.error || result.message || 'Server error';
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/cd1230fe-8443-44b4-aab0-d1ea296bed31',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'app.js:ClaimsService.request:error',message:'ClaimsService.request non-OK response',data:{endpoint,method,status:response.status,errorMsg,respKeys:result?Object.keys(result):[]},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion agent log
                 throw new Error(errorMsg);
             }
             // Handle both array and object responses
             const claimsData = Array.isArray(result.message) ? result.message : (result.data || result);
             return { success: true, data: claimsData };
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cd1230fe-8443-44b4-aab0-d1ea296bed31',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'app.js:ClaimsService.request:catch',message:'ClaimsService.request threw error',data:{endpoint,method,errorMessage:error?.message||String(error),errorName:error?.name},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion agent log
             console.error(`Claims API Error (${endpoint}):`, error);
             return { success: false, message: error.message };
         }
     },
 
-    submitClaim: (claim) => ClaimsService.request('/claim', { claim }),
+    submitClaim: (claimText) => {
+      const newClaim = (typeof claimText === 'string' ? claimText.trim() : claimText);
+      if (!newClaim) return Promise.resolve({ success: false, message: 'Claim text is required' });
+      const claimData = { claim: newClaim };
+      return ClaimsService.request('/claim', claimData);
+    },
     deleteClaim: (claimId) => ClaimsService.request(`/remove/${claimId}`, null, 'DELETE'),
     fetchAllClaims: () => ClaimsService.request('/fetch', null, 'GET')
 };
@@ -601,6 +618,16 @@ const ProfileView = () => {
     currentTrustScore: ''
   });
   const [claimForm, setClaimForm] = React.useState({ claim: '' });
+  const [credentialProviders, setCredentialProviders] = React.useState([]);
+  const [credentialsLoading, setCredentialsLoading] = React.useState(false);
+  const [credentialError, setCredentialError] = React.useState('');
+  const [credentialSuccess, setCredentialSuccess] = React.useState('');
+  const [credentialForm, setCredentialForm] = React.useState({
+    provider: '',
+    identifier: '',
+    issueDate: ''
+  });
+  const [credentialSubmitting, setCredentialSubmitting] = React.useState(false);
 
   const loadClaims = async () => {
     try {
@@ -616,6 +643,45 @@ const ProfileView = () => {
   React.useEffect(() => {
     if (activeTab === 'claims') {
       loadClaims();
+    }
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    const loadCredentials = async () => {
+      setCredentialsLoading(true);
+      setCredentialError('');
+      try {
+        const result = await TrustScoreService.getCredentials();
+        if (result.success) {
+          const data = result.data;
+          let providers = [];
+          if (Array.isArray(data)) {
+            providers = data;
+          } else if (Array.isArray(data?.providers)) {
+            providers = data.providers;
+          } else if (Array.isArray(data?.data)) {
+            providers = data.data;
+          }
+          setCredentialProviders(providers);
+          if (!credentialForm.provider && providers.length > 0) {
+            const first = providers[0];
+            const value = typeof first === 'string'
+              ? first
+              : (first.id || first.provider || first.name || '');
+            setCredentialForm((prev) => ({ ...prev, provider: value }));
+          }
+        } else {
+          setCredentialError(result.message || 'Failed to load credential providers');
+        }
+      } catch (err) {
+        setCredentialError(err.message || 'Failed to load credential providers');
+      } finally {
+        setCredentialsLoading(false);
+      }
+    };
+
+    if (activeTab === 'credentials') {
+      loadCredentials();
     }
   }, [activeTab]);
 
@@ -667,6 +733,41 @@ const ProfileView = () => {
       setError('Connection error. Please check your network.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCredentialSubmit = async (e) => {
+    e.preventDefault();
+    setCredentialError('');
+    setCredentialSuccess('');
+
+    const provider = credentialForm.provider;
+    const identifier = credentialForm.identifier?.trim();
+    const issueDate = credentialForm.issueDate;
+
+    if (!provider || !identifier) {
+      setCredentialError('Please select a provider and enter a credential ID or link.');
+      return;
+    }
+
+    const newCredential = {
+      provider,
+      credential_id: identifier,
+      issue_date: issueDate || null
+    };
+
+    setCredentialSubmitting(true);
+    try {
+      setProfileForm((prev) => ({
+        ...prev,
+        credentials: [...(prev.credentials || []), newCredential]
+      }));
+      setCredentialSuccess('Credential added. It will be used in your next trust score calculation.');
+      setCredentialForm((prev) => ({ ...prev, identifier: '', issueDate: '' }));
+    } catch (err) {
+      setCredentialError(err.message || 'Failed to add credential');
+    } finally {
+      setCredentialSubmitting(false);
     }
   };
 
@@ -1040,13 +1141,92 @@ const ProfileView = () => {
 
         {/* Credentials Tab */}
         {activeTab === 'credentials' && (
-          <div>
+          <div className="max-w-2xl">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Professional Credentials</h2>
-            <p className="text-gray-600 mb-6">Add and manage your professional certifications and credentials</p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-              <p className="text-blue-700">Credential management coming soon...</p>
-              <p className="text-sm text-blue-600 mt-2">You can add credentials when calculating your trust score</p>
-            </div>
+            <p className="text-gray-600 mb-6">
+              Link your verified certifications to boost your trust score. These credentials will be included the next time you calculate your trust score.
+            </p>
+
+            {credentialError && (
+              <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r">
+                {credentialError}
+              </div>
+            )}
+            {credentialSuccess && (
+              <div className="mb-4 p-3 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm rounded-r">
+                {credentialSuccess}
+              </div>
+            )}
+
+            {credentialsLoading ? (
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#002B5C] mb-3"></div>
+                <p className="text-blue-700 text-sm">Loading supported credential providers...</p>
+              </div>
+            ) : credentialProviders.length === 0 ? (
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                <p className="text-blue-700">No supported providers found.</p>
+                <p className="text-sm text-blue-600 mt-2">Please try again later or contact support.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleCredentialSubmit} className="space-y-4 bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Provider *</label>
+                  <select
+                    value={credentialForm.provider}
+                    onChange={(e) => setCredentialForm((prev) => ({ ...prev, provider: e.target.value }))}
+                    className={inputClasses}
+                  >
+                    {credentialProviders.map((provider, idx) => {
+                      const value = typeof provider === 'string'
+                        ? provider
+                        : (provider.id || provider.provider || provider.name || `provider-${idx}`);
+                      const label = typeof provider === 'string'
+                        ? provider
+                        : (provider.name || provider.provider || provider.id || `Provider ${idx + 1}`);
+                      return (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Credential ID / Link *</label>
+                  <input
+                    type="text"
+                    value={credentialForm.identifier}
+                    onChange={(e) => setCredentialForm((prev) => ({ ...prev, identifier: e.target.value }))}
+                    className={inputClasses}
+                    placeholder="e.g. AWS-1234-XYZ or public verification URL"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Date (optional)</label>
+                  <input
+                    type="date"
+                    value={credentialForm.issueDate}
+                    onChange={(e) => setCredentialForm((prev) => ({ ...prev, issueDate: e.target.value }))}
+                    className={inputClasses}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={credentialSubmitting}
+                  className={btnClasses + " w-full"}
+                >
+                  {credentialSubmitting ? 'Verifying...' : 'Verify & Add Credential'}
+                </button>
+
+                <p className="text-xs text-gray-500 mt-2">
+                  Tip: After adding your credentials here, go back to the Trust Score tab and recalculate to include them in your AI analysis.
+                </p>
+              </form>
+            )}
           </div>
         )}
         </div>
@@ -1063,6 +1243,7 @@ const RecruiterView = () => {
   const [minTrustScore, setMinTrustScore] = React.useState(0);
   const [loading, setLoading] = React.useState(false);
   const [selectedProfessional, setSelectedProfessional] = React.useState(null);
+  const [selectedCandidate, setSelectedCandidate] = React.useState(null);
   const [jobForm, setJobForm] = React.useState({
     title: '',
     description: '',
@@ -1128,6 +1309,22 @@ const RecruiterView = () => {
   }`;
   const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-[#002B5C] transition-all outline-none hover:border-gray-400";
   const btnClasses = "px-6 py-3 rounded-lg font-semibold text-white shadow-md bg-[#002B5C] hover:bg-[#001f42] hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
+
+  let parsedTrustScoreData = null;
+  if (selectedCandidate?.trustScoreData) {
+    try {
+      parsedTrustScoreData = typeof selectedCandidate.trustScoreData === 'string'
+        ? JSON.parse(selectedCandidate.trustScoreData)
+        : selectedCandidate.trustScoreData;
+    } catch (e) {
+      parsedTrustScoreData = null;
+    }
+  }
+  const candidateBreakdown = parsedTrustScoreData?.breakdown || selectedCandidate?.breakdown;
+  const candidateConfidence = parsedTrustScoreData?.confidenceLevel
+    || parsedTrustScoreData?.confidence_level
+    || selectedCandidate?.confidenceLevel
+    || selectedCandidate?.confidence_level;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1230,7 +1427,7 @@ const RecruiterView = () => {
                           </div>
                         </div>
                         <button 
-                          onClick={() => setSelectedProfessional(professional)}
+                          onClick={() => { setSelectedProfessional(professional); setSelectedCandidate(professional); }}
                           className="mt-4 w-full py-2 text-sm font-semibold text-[#002B5C] border border-[#002B5C] rounded-lg hover:bg-[#002B5C] hover:text-white transition-colors"
                         >
                           View Profile
@@ -1350,6 +1547,127 @@ const RecruiterView = () => {
           )}
         </div>
       </div>
+
+      {/* Modal: Full Profile View (renders only when selected) */}
+      {selectedCandidate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedCandidate(null)}
+        >
+          <div
+            className="w-full max-w-4xl rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between p-6 border-b border-gray-200">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {selectedCandidate?.name || 'Professional'}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedCandidate?.jobTitle || selectedCandidate?.title || 'N/A'}
+                  {selectedCandidate?.location ? ` • ${selectedCandidate.location}` : ''}
+                </p>
+              </div>
+              <button
+                className="px-3 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setSelectedCandidate(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Profile Section */}
+              <div className="lg:col-span-2 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-xs font-semibold text-gray-500">Name</div>
+                    <div className="text-sm font-bold text-gray-900 mt-1">{selectedCandidate?.name || 'N/A'}</div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-xs font-semibold text-gray-500">Trust Score</div>
+                    <div className="text-sm font-bold text-[#002B5C] mt-1">
+                      {selectedCandidate?.currentTrustScore ? parseFloat(selectedCandidate.currentTrustScore || 0).toFixed(1) : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white rounded-lg border border-gray-200">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Bio / About</div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {selectedCandidate?.bio || selectedCandidate?.about || selectedCandidate?.experience || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white rounded-lg border border-gray-200">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Skills</div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {selectedCandidate?.skillsArray || 'Not specified'}
+                  </p>
+                </div>
+              </div>
+
+              {/* AI Trust Analysis */}
+              <div className="lg:col-span-1">
+                <div className="p-4 rounded-lg border border-blue-200 bg-blue-50">
+                  <div className="text-sm font-bold text-[#002B5C] mb-3">AI Trust Analysis</div>
+
+                  {parsedTrustScoreData || candidateBreakdown ? (
+                    <div className="space-y-3 text-sm text-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-600">Confidence</span>
+                        <span className="text-xs font-bold text-gray-900">{candidateConfidence || 'N/A'}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-600">GitHub Score</span>
+                        <span className="text-xs font-bold text-gray-900">
+                          {(
+                            parsedTrustScoreData?.githubScore ??
+                            parsedTrustScoreData?.github_score ??
+                            candidateBreakdown?.githubScore ??
+                            candidateBreakdown?.github_score
+                          ) ?? 'N/A'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-600">Credential Score</span>
+                        <span className="text-xs font-bold text-gray-900">
+                          {(
+                            parsedTrustScoreData?.credentialScore ??
+                            parsedTrustScoreData?.credential_score ??
+                            candidateBreakdown?.credentialScore ??
+                            candidateBreakdown?.credential_score
+                          ) ?? 'N/A'}
+                        </span>
+                      </div>
+
+                      {candidateBreakdown && typeof candidateBreakdown === 'object' && !Array.isArray(candidateBreakdown) && (
+                        <div className="pt-3 border-t border-blue-200">
+                          <div className="text-xs font-semibold text-gray-600 mb-2">Breakdown</div>
+                          <div className="space-y-1">
+                            {Object.entries(candidateBreakdown).slice(0, 6).map(([k, v]) => (
+                              <div key={k} className="flex justify-between gap-3">
+                                <span className="text-xs text-gray-600 truncate">{k}</span>
+                                <span className="text-xs font-semibold text-gray-900">
+                                  {typeof v === 'number' ? v.toFixed(2) : (v ?? 'N/A')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-700">AI Analysis pending</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

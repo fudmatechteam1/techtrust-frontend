@@ -1406,7 +1406,7 @@ const RecruiterView = () => {
                       <div key={professional._id || index} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">{professional.githubUsername || professional.name || 'Professional'}</h3>
+                            <h3 className="text-lg font-bold text-gray-900">{professional.name || 'Professional'}</h3>
                             <p className="text-sm text-gray-500">{professional.email || 'N/A'}</p>
                           </div>
                           <div className="text-right">
@@ -1561,7 +1561,7 @@ const RecruiterView = () => {
             <div className="flex items-start justify-between p-6 border-b border-gray-200">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">
-                  {selectedCandidate?.githubUsername || selectedCandidate?.name || 'Professional'}
+                  {selectedCandidate?.name || 'Professional'}
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
                   {selectedCandidate?.jobTitle || selectedCandidate?.title || 'N/A'}
@@ -1582,7 +1582,7 @@ const RecruiterView = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="text-xs font-semibold text-gray-500">Name</div>
-                    <div className="text-sm font-bold text-gray-900 mt-1">{selectedCandidate?.githubUsername || selectedCandidate?.name || 'N/A'}</div>
+                    <div className="text-sm font-bold text-gray-900 mt-1">{selectedCandidate?.name || 'N/A'}</div>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="text-xs font-semibold text-gray-500">Trust Score</div>
@@ -1612,66 +1612,7 @@ const RecruiterView = () => {
                 <div className="p-4 rounded-lg border border-blue-200 bg-blue-50">
                   <div className="text-sm font-bold text-[#002B5C] mb-3">AI Trust Analysis</div>
 
-                  {selectedCandidate?.vettingSummary ? (
-                    <div className="space-y-3 text-sm text-gray-700">
-                      <div className="mb-3">
-                        <div className="text-xs font-semibold text-gray-600 mb-2">AI Verification Summary</div>
-                        <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
-                          {selectedCandidate.vettingSummary}
-                        </p>
-                      </div>
-                      {parsedTrustScoreData || candidateBreakdown ? (
-                        <>
-                          <div className="pt-3 border-t border-blue-200 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-gray-600">Confidence</span>
-                              <span className="text-xs font-bold text-gray-900">{candidateConfidence || 'N/A'}</span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-gray-600">GitHub Score</span>
-                              <span className="text-xs font-bold text-gray-900">
-                                {(
-                                  parsedTrustScoreData?.githubScore ??
-                                  parsedTrustScoreData?.github_score ??
-                                  candidateBreakdown?.githubScore ??
-                                  candidateBreakdown?.github_score
-                                ) ?? 'N/A'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-gray-600">Credential Score</span>
-                              <span className="text-xs font-bold text-gray-900">
-                                {(
-                                  parsedTrustScoreData?.credentialScore ??
-                                  parsedTrustScoreData?.credential_score ??
-                                  candidateBreakdown?.credentialScore ??
-                                  candidateBreakdown?.credential_score
-                                ) ?? 'N/A'}
-                              </span>
-                            </div>
-
-                            {candidateBreakdown && typeof candidateBreakdown === 'object' && !Array.isArray(candidateBreakdown) && (
-                              <div className="pt-3 border-t border-blue-200">
-                                <div className="text-xs font-semibold text-gray-600 mb-2">Breakdown</div>
-                                <div className="space-y-1">
-                                  {Object.entries(candidateBreakdown).slice(0, 6).map(([k, v]) => (
-                                    <div key={k} className="flex justify-between gap-3">
-                                      <span className="text-xs text-gray-600 truncate">{k}</span>
-                                      <span className="text-xs font-semibold text-gray-900">
-                                        {typeof v === 'number' ? v.toFixed(2) : (v ?? 'N/A')}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-                  ) : parsedTrustScoreData || candidateBreakdown ? (
+                  {parsedTrustScoreData || candidateBreakdown ? (
                     <div className="space-y-3 text-sm text-gray-700">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-600">Confidence</span>

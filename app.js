@@ -1581,7 +1581,7 @@ const RecruiterView = () => {
               <div className="lg:col-span-2 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-xs font-semibold text-gray-500">Name</div>
+                    <div className="text-xs font-semibold text-gray-500">githubUsername</div>
                     <div className="text-sm font-bold text-gray-900 mt-1">{selectedCandidate?.name || 'N/A'}</div>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -1696,4 +1696,5 @@ const App = () => {
 
 // FIX: Direct Render Call
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
 root.render(<App />);
